@@ -30,7 +30,13 @@ export async function loadMemory(): Promise<ProductMemory> {
     const raw = await readFile(MEMORY, "utf8");
     const parsed = JSON.parse(raw) as ProductMemory;
     if (!parsed || !Array.isArray(parsed.items)) return emptyMemory();
-    return parsed;
+    return {
+      ...emptyMemory(),
+      ...parsed,
+      products: parsed.products ?? (parsed.product ? [parsed.product] : []),
+      ledger: parsed.ledger ?? [],
+      nextDecisionNumber: parsed.nextDecisionNumber ?? 1,
+    };
   } catch {
     return emptyMemory();
   }

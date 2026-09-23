@@ -7,6 +7,14 @@ import { recommendationMarkdown } from "./recommend";
 import { impactMarkdown } from "./impact";
 import { analyticsMarkdown } from "./analytics";
 import { approvalMarkdown, pendingMandatory } from "./approval";
+import { decisionMarkdown } from "./decide";
+import { ledgerMarkdown } from "./ledger";
+import { reevaluationMarkdown } from "./reevaluate";
+import { graphMarkdown } from "./graph";
+import { opportunityMarkdown } from "./score";
+import { portfolioMarkdown } from "./portfolio";
+import { monitorMarkdown } from "./monitor";
+import { loopMarkdown } from "./loop";
 import { orchestrationMarkdown } from "./orchestrate";
 import { experimentMarkdown } from "./experiment";
 import { riskAnalysisMarkdown } from "./risks";
@@ -174,6 +182,40 @@ ${
 }
 
 ${approvalMarkdown(plan)}
+
+## Product decision
+
+Name the options. Do not treat a single Build as the decision.
+
+${decisionMarkdown(plan)}
+
+## Decision ledger
+
+${ledgerMarkdown(plan)}
+
+## Decision re-evaluation
+
+${reevaluationMarkdown(plan)}
+
+## Product knowledge graph
+
+${graphMarkdown(plan)}
+
+## Opportunity scoring
+
+${opportunityMarkdown(plan)}
+
+## Product portfolio
+
+${portfolioMarkdown(plan)}
+
+## Product monitoring
+
+${monitorMarkdown(plan)}
+
+## Product agent loop
+
+${loopMarkdown(plan)}
 `;
 }
 
@@ -277,6 +319,38 @@ ${orchestrationMarkdown(plan)}
 ## Human approval
 
 ${approvalMarkdown(plan)}
+
+## Product decision
+
+${decisionMarkdown(plan)}
+
+## Decision ledger
+
+${ledgerMarkdown(plan)}
+
+## Decision re-evaluation
+
+${reevaluationMarkdown(plan)}
+
+## Product knowledge graph
+
+${graphMarkdown(plan)}
+
+## Opportunity scoring
+
+${opportunityMarkdown(plan)}
+
+## Product portfolio
+
+${portfolioMarkdown(plan)}
+
+## Product monitoring
+
+${monitorMarkdown(plan)}
+
+## Product agent loop
+
+${loopMarkdown(plan)}
 
 ## Product to engineering
 

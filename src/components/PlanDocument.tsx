@@ -19,6 +19,14 @@ import {
   AUTHORIZATION_LABEL,
   applyGateDecision,
 } from "@/lib/approval";
+import { DECIDE_NOTE, DECIDE_QUESTION, applyDecisionChoice } from "@/lib/decide";
+import { LEDGER_NOTE, STALE_ASSUMPTIONS, WHY_ARCHITECTURE, askLedger } from "@/lib/ledger";
+import { REEVAL_NOTE, REEVAL_WARNING } from "@/lib/reevaluate";
+import { GRAPH_ASSUMPTIONS, GRAPH_BIGGEST, GRAPH_FEEDBACK, GRAPH_NOTE, GRAPH_WEAK, askGraph, graphPaths } from "@/lib/graph";
+import { OPPORTUNITY_NOTE } from "@/lib/score";
+import { PORTFOLIO_BET_LABEL, PORTFOLIO_LABEL, PORTFOLIO_NOTE, PORTFOLIO_QUESTION, applyPortfolioChoice } from "@/lib/portfolio";
+import { MONITOR_NOTE } from "@/lib/monitor";
+import { LOOP_NOTE, LOOP_QUESTION, applyLoopAdvance, buildProductLoop } from "@/lib/loop";
 import { KIND_LABEL, TRACE_NOTE, whyThis } from "@/lib/trace";
 import { ORCHESTRATE_NOTE } from "@/lib/orchestrate";
 import { saveMemoryRemote, savePlan } from "@/lib/storage";
@@ -44,10 +52,18 @@ const SECTIONS = [
   ["risk", "Risks"],
   ["priority", "Priority"],
   ["recommend", "Recommend"],
+  ["score", "Score"],
   ["experiment", "Experiments"],
   ["analytics", "Analytics"],
   ["roadmap", "Roadmap"],
   ["approval", "Approvals"],
+  ["decide", "Decide"],
+  ["ledger", "Ledger"],
+  ["reevaluate", "Revisit"],
+  ["graph", "Graph"],
+  ["portfolio", "Portfolio"],
+  ["monitor", "Monitor"],
+  ["loop", "Loop"],
   ["handoff", "Handoff"],
 ] as const;
 
@@ -126,18 +142,65 @@ async function copy(text: string) {
 
 export function PlanDocument({ plan }: { plan: ProductPlan }) {
   const [whyQuery, setWhyQuery] = useState("");
+  const [ledgerQuery, setLedgerQuery] = useState("");
+  const [graphQuery, setGraphQuery] = useState("");
   const [live, setLive] = useState(plan);
   const featureName = (id: string) => plan.features.find((feature) => feature.id === id)?.name ?? id;
   const whyChains = useMemo(() => whyThis(plan, whyQuery), [plan, whyQuery]);
+  const ledgerAnswer = useMemo(
+    () => askLedger({ entries: live.decisionLedger?.entries ?? [], query: ledgerQuery, corpus: plan.sourceText }),
+    [live.decisionLedger, ledgerQuery, plan.sourceText],
+  );
+  const graphAnswer = useMemo(
+    () => askGraph(live, graphQuery, { corpus: plan.sourceText }),
+    [live, graphQuery, plan.sourceText],
+  );
+  const paths = useMemo(() => graphPaths(live), [live]);
+
+  function persist(next: ProductPlan) {
+    const refreshed = { ...next, productLoop: buildProductLoop(next) };
+    setLive(refreshed);
+    savePlan(refreshed);
+    return refreshed;
+  }
 
   function decide(gateId: string, status: "approved" | "rejected") {
-    const next = applyGateDecision(live, gateId, status);
-    setLive(next);
-    savePlan(next);
+    const next = persist(applyGateDecision(live, gateId, status));
     const gate = next.approvals.gates.find((item) => item.id === gateId);
     if (gate) {
       void saveMemoryRemote({
         feedback: `${status === "approved" ? "Approved" : "Sent back"}: ${APPROVAL_LABEL[gate.kind]} — ${gate.proposal}`,
+      });
+    }
+  }
+
+  function choosePortfolio(optionId: string) {
+    const next = persist(applyPortfolioChoice(live, optionId));
+    const option = next.portfolio.options.find((item) => item.id === optionId);
+    if (option) {
+      void saveMemoryRemote({
+        feedback: `Portfolio record: ${next.portfolio.question} Chose: ${option.title}`,
+      });
+    }
+  }
+
+  function choose(optionId: string) {
+    const next = persist(applyDecisionChoice(live, optionId));
+    const option = next.decisionEngine.options.find((item) => item.id === optionId);
+    if (option) {
+      void saveMemoryRemote({
+        feedback: `Decision record: ${next.decisionEngine.question} Chose: ${option.title}`,
+        ledger: next.decisionLedger?.entries,
+      });
+    }
+  }
+
+  function advanceLoop() {
+    const next = persist(applyLoopAdvance(live));
+    const signal = next.monitoring.signals.find((item) => item.status === "approved");
+    if (signal) {
+      void saveMemoryRemote({
+        feedback: `Loop advanced: Investigation complete for ${signal.feature}. ${signal.change}`,
       });
     }
   }
@@ -894,6 +957,42 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           </ol>
         </section>
 
+        <section id="score" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Opportunity Scoring</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{OPPORTUNITY_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.opportunityScoring?.ascii}
+          </pre>
+          <ol className="mt-4 space-y-4">
+            {(live.opportunityScoring?.items ?? []).map((item, index) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">
+                    <span className="mr-2 font-mono text-xs text-ink-soft">{index + 1}</span>
+                    {item.opportunity}
+                  </h3>
+                  <span className="font-serif text-2xl text-navy">{item.score}</span>
+                </div>
+                <p className="mt-2 font-mono text-sm text-ink-soft">{item.rationale}</p>
+                <ul className="mt-4 divide-y divide-rule/70">
+                  {item.factors.map((factor) => (
+                    <li key={factor.key} className="grid gap-2 py-3 sm:grid-cols-[11rem_3.5rem_1fr] sm:items-start">
+                      <p className="text-sm">{factor.label}</p>
+                      <p className="font-mono text-sm">
+                        {factor.sign === 1 ? "+" : "−"}
+                        {factor.score}
+                      </p>
+                      <p className="text-sm leading-6 text-ink-soft">
+                        <Pill tone={evidenceTone(factor.evidence)}>{factor.evidence}</Pill> {factor.reason}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        </section>
+
         <section id="experiment" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Experiment Planning</h2>
           <p className="mt-3 text-sm leading-6 text-ink-soft">{EXPERIMENT_NOTE}</p>
@@ -1072,6 +1171,540 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                     </button>
                   </div>
                 )}
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="decide" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product Decision Engine</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{DECIDE_NOTE}</p>
+          <p className="mt-2 font-serif text-xl text-navy">{live.decisionEngine?.question ?? DECIDE_QUESTION}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.decisionEngine?.ascii}
+          </pre>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {(live.decisionEngine?.contexts ?? []).map((ctx) => (
+              <article key={ctx.kind} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">
+                  {ctx.kind === "user" ? "User Evidence" : ctx.kind === "business" ? "Business Context" : "Technical Context"}
+                </p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {ctx.lines.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          {(live.decisionEngine?.missing ?? []).length > 0 && (
+            <div className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Still missing</p>
+              <p className="mt-1 text-sm leading-6 text-ink-soft">{DECIDE_QUESTION}</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                {live.decisionEngine.missing.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <ol className="mt-4 space-y-4">
+            {(live.decisionEngine?.options ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{item.title}</h3>
+                  {live.decisionEngine.record.chosenOptionId === item.id && <Pill tone="sage">chosen</Pill>}
+                </div>
+                <p className="mt-2 text-sm leading-6">{item.summary}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.evidence.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Trade-offs</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.tradeoffs.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risks</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.risks.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Still missing</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.missing.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                {live.decisionEngine.record.status === "pending" && (
+                  <button
+                    type="button"
+                    className="no-print mt-4 rounded-full bg-navy px-4 py-2 text-sm text-paper"
+                    onClick={() => choose(item.id)}
+                  >
+                    Choose this option
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+          <div className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Human decision</p>
+            <p className="mt-1 text-sm leading-6">
+              {live.decisionEngine?.record.status === "chosen"
+                ? `Chose ${live.decisionEngine.options.find((item) => item.id === live.decisionEngine.record.chosenOptionId)?.title ?? "an option"}.`
+                : "Waiting for a person to choose."}
+            </p>
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision record</p>
+            <p className="mt-1 text-sm leading-6">{live.decisionEngine?.record.status}</p>
+          </div>
+        </section>
+
+        <section id="ledger" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Decision Ledger</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{LEDGER_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.decisionLedger?.ascii}
+          </pre>
+          <label className="mt-6 block">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Ask the ledger</span>
+            <input
+              value={ledgerQuery}
+              onChange={(event) => setLedgerQuery(event.target.value)}
+              placeholder={WHY_ARCHITECTURE}
+              className="mt-2 w-full rounded-2xl border border-rule bg-white px-4 py-3 text-sm"
+            />
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setLedgerQuery(WHY_ARCHITECTURE)}
+            >
+              Why this architecture
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setLedgerQuery(STALE_ASSUMPTIONS)}
+            >
+              Assumptions no longer valid
+            </button>
+          </div>
+          {ledgerQuery && (
+            <article className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{ledgerAnswer.kind}</p>
+              <p className="mt-2 text-sm leading-6">{ledgerAnswer.answer}</p>
+            </article>
+          )}
+          <ol className="mt-4 space-y-4">
+            {(live.decisionLedger?.entries ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">Decision #{item.number}</h3>
+                  <Pill tone={item.status === "recorded" ? "sage" : "copper"}>{item.status}</Pill>
+                </div>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Question</p>
+                <p className="mt-1 text-sm leading-6">{item.question}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Options</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.options.map((option) => (
+                    <li key={option.key}>
+                      {option.key}. {option.title}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.evidence.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Constraints</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.constraints.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risks</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.risks.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Assumptions</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.assumptions.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={line.health === "stale" ? "stamp" : line.health === "valid" ? "sage" : "copper"}>{line.health}</Pill>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision</p>
+                <p className="mt-1 text-sm leading-6">{item.decision || "Open."}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Reason</p>
+                <p className="mt-1 text-sm leading-6">{item.reason || "A person has not chosen yet."}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Owner</p>
+                <p className="mt-1 text-sm leading-6">{item.owner || "Unassigned"}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Date</p>
+                <p className="mt-1 text-sm leading-6">{item.date || "Unrecorded"}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="reevaluate" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Decision Re-evaluation</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{REEVAL_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.decisionReevaluation?.ascii}
+          </pre>
+          {(live.decisionReevaluation?.cases ?? []).length === 0 ? (
+            <p className="mt-4 text-sm leading-6 text-ink-soft">No recorded decision has new contradicting evidence.</p>
+          ) : (
+            <ol className="mt-4 space-y-4">
+              {(live.decisionReevaluation?.cases ?? []).map((item) => (
+                <li key={`${item.decisionNumber}-${item.assumption}`} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <h3 className="font-serif text-xl text-navy">Decision #{item.decisionNumber}</h3>
+                    <Pill tone={item.verdict === "review" ? "stamp" : "sage"}>{item.verdict}</Pill>
+                  </div>
+                  <p className="mt-2 text-sm leading-6">{item.question}</p>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">New evidence</p>
+                  <p className="mt-1 text-sm leading-6">
+                    {item.evidence.text} <Pill tone={evidenceTone(item.evidence.evidence)}>{item.evidence.evidence}</Pill>
+                  </p>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Assumption changed?</p>
+                  <p className="mt-1 text-sm leading-6">{item.assumption}</p>
+                  {item.changed && (
+                    <p className="mt-3 text-sm leading-6 text-stamp">⚠ {item.warning || REEVAL_WARNING}</p>
+                  )}
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Impact analysis</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                    {item.affected.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Should the decision be revisited?</p>
+                  <p className="mt-1 text-sm leading-6">{item.recommendation}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        <section id="graph" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product Knowledge Graph</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{GRAPH_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productGraph?.ascii}
+          </pre>
+          <label className="mt-6 block">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Ask the graph</span>
+            <input
+              value={graphQuery}
+              onChange={(event) => setGraphQuery(event.target.value)}
+              placeholder={GRAPH_BIGGEST}
+              className="mt-2 w-full rounded-2xl border border-rule bg-white px-4 py-3 text-sm"
+            />
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setGraphQuery(GRAPH_BIGGEST)}
+            >
+              Biggest problems
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setGraphQuery(GRAPH_WEAK)}
+            >
+              Weak evidence
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setGraphQuery(GRAPH_ASSUMPTIONS)}
+            >
+              Unvalidated assumptions
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setGraphQuery(GRAPH_FEEDBACK)}
+            >
+              Feedback on decisions
+            </button>
+          </div>
+          {graphQuery && (
+            <article className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{graphAnswer.kind}</p>
+              <p className="mt-2 text-sm leading-6">{graphAnswer.answer}</p>
+            </article>
+          )}
+          <ol className="mt-4 space-y-4">
+            {paths.slice(0, 8).map((path) => (
+              <li key={path.feature.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <h3 className="font-serif text-xl text-navy">{path.feature.label}</h3>
+                <p className="mt-2 text-sm leading-6">
+                  {[path.customer, path.problem, path.opportunity, path.requirement, ...path.branches, path.outcome]
+                    .filter(Boolean)
+                    .map((item) => `${item?.kind}: ${item?.label}`)
+                    .join(" → ")}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="portfolio" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Portfolio Intelligence</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{PORTFOLIO_NOTE}</p>
+          <p className="mt-2 font-serif text-xl text-navy">{live.portfolio?.question ?? PORTFOLIO_QUESTION}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.portfolio?.engineAscii}
+          </pre>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.portfolio?.ascii}
+          </pre>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {(live.portfolio?.contexts ?? []).map((ctx) => (
+              <article key={ctx.kind} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">
+                  {ctx.kind === "products" ? "Products" : ctx.kind === "capacity" ? "Capacity" : "Evidence"}
+                </p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {ctx.lines.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {(live.portfolio?.products ?? []).map((item) => (
+              <article key={item.name} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-serif text-xl text-navy">{item.name}</h3>
+                  <Pill tone={evidenceTone(item.evidence)}>{item.evidence}</Pill>
+                </div>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.features.slice(0, 8).map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          <ol className="mt-4 space-y-4">
+            {(live.portfolio?.findings ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{PORTFOLIO_LABEL[item.kind]}</p>
+                  <Pill tone={evidenceTone(item.evidence)}>{item.evidence}</Pill>
+                </div>
+                <h3 className="mt-2 font-serif text-xl text-navy">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6">{item.detail}</p>
+                {item.products.length > 0 && (
+                  <p className="mt-2 text-sm text-ink-soft">{item.products.join(" · ")}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+          {(live.portfolio?.missing ?? []).length > 0 && (
+            <div className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Still missing</p>
+              <p className="mt-1 text-sm leading-6 text-ink-soft">{PORTFOLIO_QUESTION}</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                {live.portfolio.missing.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <ol className="mt-4 space-y-4">
+            {(live.portfolio?.options ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{PORTFOLIO_BET_LABEL[item.kind]}</p>
+                  {live.portfolio.record.chosenOptionId === item.id && <Pill tone="sage">chosen</Pill>}
+                </div>
+                <h3 className="mt-2 font-serif text-xl text-navy">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6">{item.summary}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.evidence.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Trade-offs</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.tradeoffs.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risks</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.risks.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Still missing</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.missing.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                {live.portfolio.record.status === "pending" && (
+                  <button
+                    type="button"
+                    className="no-print mt-4 rounded-full bg-navy px-4 py-2 text-sm text-paper"
+                    onClick={() => choosePortfolio(item.id)}
+                  >
+                    Choose this bet
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+          {live.portfolio?.record.status === "chosen" && (
+            <p className="mt-4 text-sm leading-6">
+              Chose {live.portfolio.options.find((item) => item.id === live.portfolio.record.chosenOptionId)?.title}.
+            </p>
+          )}
+        </section>
+
+        <section id="monitor" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Autonomous Product Monitoring</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{MONITOR_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.monitoring?.ascii}
+          </pre>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Metrics</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                {(live.monitoring?.metrics ?? []).length ? live.monitoring.metrics.map((line) => <li key={line}>{line}</li>) : <li>None named.</li>}
+              </ul>
+            </article>
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Feedback</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                {(live.monitoring?.feedback ?? []).length ? live.monitoring.feedback.map((line) => <li key={line}>{line}</li>) : <li>None named.</li>}
+              </ul>
+            </article>
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Experiments</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                {(live.monitoring?.experiments ?? []).length ? live.monitoring.experiments.map((line) => <li key={line}>{line}</li>) : <li>None named.</li>}
+              </ul>
+            </article>
+          </div>
+          {(live.monitoring?.signals ?? []).length === 0 ? (
+            <p className="mt-4 text-sm text-ink-soft">No live anomaly was named.</p>
+          ) : (
+            <ol className="mt-4 space-y-4">
+              {(live.monitoring?.signals ?? []).map((item) => (
+                <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-stamp">⚠ {item.warning}</p>
+                    <Pill tone={item.confidence === "high" ? "sage" : item.confidence === "medium" ? "copper" : "ink"}>
+                      {`${item.confidence} confidence`}
+                    </Pill>
+                  </div>
+                  <h3 className="mt-2 font-serif text-xl text-navy">Feature: {item.feature}</h3>
+                  <p className="mt-2 text-sm leading-6">{item.change}</p>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Potential causes</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                    {item.causes.map((cause) => (
+                      <li key={cause.text}>
+                        {cause.text} <Pill tone={evidenceTone(cause.evidence)}>{cause.evidence}</Pill>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Recommended investigation</p>
+                  <p className="mt-1 text-sm leading-6">{item.investigation}</p>
+                  <p className="mt-3 text-sm text-ink-soft">
+                    Status: {item.status}. The monitor investigates before it decides.
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        <section id="loop" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Autonomous Product Loop</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{LOOP_NOTE}</p>
+          <p className="mt-2 font-serif text-xl text-navy">{LOOP_QUESTION}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productLoop?.engineAscii}
+          </pre>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productLoop?.ascii}
+          </pre>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Now</p>
+              <p className="mt-2 font-serif text-xl text-navy">{live.productLoop?.current}</p>
+              <p className="mt-2 text-sm leading-6">{live.productLoop?.action}</p>
+            </article>
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Next</p>
+              <p className="mt-2 font-serif text-xl text-navy">{live.productLoop?.next}</p>
+              <p className="mt-2 text-sm leading-6">
+                {live.productLoop?.mode === "waiting" ? live.productLoop.blocker || "A person still signs." : "The loop can keep reading evidence."}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Authorization</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Pill tone={live.productLoop?.mode === "waiting" ? "copper" : "sage"}>{live.productLoop?.mode ?? "autonomous"}</Pill>
+                <Pill tone={live.productLoop?.authorization === "mandatory" ? "stamp" : live.productLoop?.authorization === "review" ? "copper" : "navy"}>
+                  {live.productLoop?.authorization ?? "automatic"}
+                </Pill>
+              </div>
+              <p className="mt-2 text-sm leading-6">Observe through propose can run. Validate, decide, and execute wait.</p>
+            </article>
+          </div>
+          {live.productLoop?.current === "analyze" && (live.monitoring?.signals ?? []).some((item) => item.status === "investigating") && (
+            <button
+              type="button"
+              className="no-print mt-4 rounded-full bg-navy px-4 py-2 text-sm text-paper"
+              onClick={() => advanceLoop()}
+            >
+              Investigation complete
+            </button>
+          )}
+          <ol className="mt-4 space-y-3">
+            {(live.productLoop?.stages ?? []).map((item) => (
+              <li
+                key={item.id}
+                className={`rounded-2xl border p-4 ${
+                  item.status === "current" ? "border-copper bg-copper/10" : "border-rule bg-white/70"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{item.label}</h3>
+                  <Pill tone={item.status === "current" ? "copper" : item.status === "done" ? "sage" : "ink"}>{item.status}</Pill>
+                </div>
+                <p className="mt-2 text-sm leading-6">{item.text}</p>
               </li>
             ))}
           </ol>

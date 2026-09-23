@@ -1,6 +1,6 @@
-import { emptyMemory, mergeMemory, rememberNotes } from "@/lib/memory";
+import { emptyMemory, mergeMemory, rememberLedger, rememberNotes } from "@/lib/memory";
 import { loadMemory, saveMemory } from "@/lib/store";
-import type { ProductMemory } from "@/lib/types";
+import type { LedgerEntry, ProductMemory } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,7 @@ export async function PUT(request: Request) {
       memory?: ProductMemory;
       feedback?: string;
       metrics?: string;
+      ledger?: LedgerEntry[];
       clear?: boolean;
     };
     if (body.clear) {
@@ -26,6 +27,7 @@ export async function PUT(request: Request) {
     if (body.feedback || body.metrics) {
       memory = rememberNotes(memory, { feedback: body.feedback, metrics: body.metrics });
     }
+    if (body.ledger?.length) memory = rememberLedger(memory, body.ledger);
     await saveMemory(memory);
     return Response.json({ memory });
   } catch {

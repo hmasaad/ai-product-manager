@@ -65,6 +65,22 @@ The PM does not commit on its own. Human approval gates sit after a proposal: ev
 
 The product manager is an orchestrator. Six specialists run the work: Product Research, Requirements, Analytics, Market, Risk, and Experiment. Their outputs meet at a Product Decision. Market is a competitor landscape from the source, not a TAM study.
 
+The Product Decision Engine collects user evidence, business context, and technical context, then writes options, trade-offs, and risks. A person chooses. The choice becomes a decision record. The engine answers what the options are, what evidence supports each one, what is being traded off, and what is still missing. It does not stop at “Build X.”
+
+Significant choices land on a Decision Ledger: question, options, evidence, constraints, risks, assumptions, the decision, the reason, the owner, and the date. Later the PM can ask why an architecture was chosen, or which assumptions behind that decision no longer hold. Those records stay in product memory.
+
+A recorded decision is re-evaluated when new evidence arrives. If an assumption has changed, the PM names the impact and asks whether the decision should be revisited. Stated later evidence such as a 38% rise in offline usage stays stated. A greenfield brief with no new evidence stays quiet.
+
+The Product Knowledge Graph connects customer, problem, opportunity, feature, and requirement, then the decision, risk, experiment, and metric that hang off that requirement, and the outcome they aim for. The PM can ask which features sit on the biggest customer problems, which roadmap items have weak evidence, which requirements hang on unvalidated assumptions, and which decisions new customer feedback moves.
+
+Opportunity scoring evaluates each named opportunity on eight factors: customer impact, business impact, strategic alignment, reach, confidence, engineering effort, risk, and evidence quality. Each factor is 1 to 5 with a reason and an evidence tag. The stored equation is the score. A bare 8.7/10 is not a score. Reach stays unknown when the source never counted users.
+
+Portfolio Intelligence reads every remembered product plus the current plan. The tree is the portfolio, then each product and its features, then a portfolio view. That view names duplicated initiatives, conflicting roadmaps, shared dependencies, resource constraints, strategic gaps, weak evidence, and risky assumptions. Then it names the bets, the evidence for each, the trade-offs, and what is still missing. A person records the call. A single product stays a single column. Totals stay unnamed unless stated.
+
+Autonomous product monitoring reads metrics, feedback, and experiments. A stated anomaly becomes a product signal: the feature, the change, potential causes, evidence confidence, and a recommended investigation. A 17% conversion drop on Report Export stays 17%, with the three named causes and a pre/post-release funnel check. The monitor investigates before it decides. A person still signs.
+
+The Autonomous Product Loop is the operating cycle: observe, understand, discover, analyze, propose, validate, decide, plan, execute, measure, learn, then observe again. Observe through propose can run from evidence. Validate, decide, and execute wait on a person. A live signal stays on analyze until the investigation is signed complete. A problem brief stays on validate. Mandatory gates hold decide. After measure and learn, the loop observes again. The PM is an operating system, not a document printer.
+
 A requirement change has a blast radius: features, APIs, database, screens, permissions, tests, documentation, and security. That list is written into the architect brief and the developer brief.
 
 A feature is a chain from a business goal to a test case. A backend task is the API. Asking why that API exists walks back through the feature, the user story, the customer problem, and the business goal.

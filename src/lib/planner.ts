@@ -9,6 +9,14 @@ import { trackDecisions } from "./assumption";
 import { analyzeImpact } from "./impact";
 import { buildAnalytics, emptyAnalytics } from "./analytics";
 import { buildApprovals, emptyApprovals } from "./approval";
+import { buildDecisionEngine, emptyDecisionEngine } from "./decide";
+import { buildDecisionLedger, emptyDecisionLedger } from "./ledger";
+import { buildDecisionReevaluation, emptyDecisionReevaluation } from "./reevaluate";
+import { buildProductGraph, emptyProductGraph } from "./graph";
+import { buildPortfolio, emptyPortfolio } from "./portfolio";
+import { buildMonitoring, emptyMonitor } from "./monitor";
+import { buildProductLoop, emptyProductLoop } from "./loop";
+import { buildOpportunityScoring, emptyOpportunityScoring } from "./score";
 import { buildOrchestration, emptyOrchestration } from "./orchestrate";
 import { buildExperiments } from "./experiment";
 import { buildRiskAnalysis, emptyRiskAnalysis } from "./risks";
@@ -74,12 +82,20 @@ export function planFromJudgment(input: {
     decisions: [],
     conflicts: [],
     recommendations: [],
+    opportunityScoring: emptyOpportunityScoring(),
     impacts: [],
     riskAnalysis: emptyRiskAnalysis(),
     experiments: [],
     analytics: emptyAnalytics(),
     approvals: emptyApprovals(),
     orchestration: emptyOrchestration(),
+    decisionEngine: emptyDecisionEngine(),
+    decisionLedger: emptyDecisionLedger(),
+    decisionReevaluation: emptyDecisionReevaluation(),
+    productGraph: emptyProductGraph(),
+    portfolio: emptyPortfolio(),
+    monitoring: emptyMonitor(),
+    productLoop: emptyProductLoop(),
     traceability: emptyTraceability(),
     decomposition: { root: "", ascii: "", nodes: [] },
     discovery,
@@ -133,11 +149,19 @@ export function planFromJudgment(input: {
     memory: input.memory,
   });
   plan.recommendations = buildRecommendations(plan, input.memory);
+  plan.opportunityScoring = buildOpportunityScoring(plan, input.memory);
   plan.impacts = analyzeImpact(plan, input.memory);
   plan.riskAnalysis = buildRiskAnalysis(plan);
   plan.experiments = buildExperiments(plan);
   plan.analytics = buildAnalytics(plan, input.memory);
+  plan.monitoring = buildMonitoring(plan, input.memory);
   plan.approvals = buildApprovals(plan);
+  plan.decisionEngine = buildDecisionEngine(plan, input.memory);
+  plan.decisionLedger = buildDecisionLedger(plan, input.memory);
+  plan.decisionReevaluation = buildDecisionReevaluation(plan, input.memory);
+  plan.productGraph = buildProductGraph(plan);
+  plan.portfolio = buildPortfolio(plan, input.memory);
+  plan.productLoop = buildProductLoop(plan);
   plan.orchestration = buildOrchestration(plan);
   plan.handoff = {
     architect: architectBrief(plan),

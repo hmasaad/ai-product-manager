@@ -32,10 +32,10 @@ export default function PlanPage() {
             </Link>
           </div>
         )}
-        {plan && (!plan.discovery || !plan.decomposition || !plan.roadmap || !plan.recommendations || !plan.conflicts || !plan.ambiguities || !plan.decisions || !plan.traceability || !plan.impacts || !plan.riskAnalysis || !plan.experiments || !plan.analytics || !plan.approvals || !plan.orchestration || !plan.priorities.every((item) => item.factors?.length === 7)) && (
+        {plan && (!plan.discovery || !plan.decomposition || !plan.roadmap || !plan.recommendations || !plan.opportunityScoring || !plan.conflicts || !plan.ambiguities || !plan.decisions || !plan.traceability || !plan.impacts || !plan.riskAnalysis || !plan.experiments || !plan.analytics || !plan.approvals || !plan.orchestration || !plan.decisionEngine || !plan.decisionLedger || !plan.decisionReevaluation || !plan.productGraph || !plan.portfolio || !(plan.portfolio.options?.length >= 2) || !plan.monitoring || !plan.productLoop || !plan.productLoop.mode || !plan.priorities.every((item) => item.factors?.length === 7)) && (
           <div>
             <h1 className="font-serif text-4xl text-navy">This plan is from an older run</h1>
-            <p className="mt-3 text-ink-soft">Build it again to include discovery, ambiguities, tracked decisions, the PRD, scored priorities, recommendations, conflicts, traceability, change impact, risk analysis, experiments, analytics, approval gates, specialized agents, and the roadmap.</p>
+            <p className="mt-3 text-ink-soft">Build it again to include discovery, ambiguities, tracked decisions, the PRD, scored priorities, recommendations, opportunity scores, conflicts, traceability, change impact, risk analysis, experiments, analytics, approval gates, specialized agents, the decision engine, the decision ledger, re-evaluation, the knowledge graph, portfolio intelligence, product monitoring, the autonomous product loop, and the roadmap.</p>
             <Link href="/" className="mt-6 inline-block rounded-full bg-navy px-5 py-2.5 text-sm text-paper">
               New plan
             </Link>
@@ -46,6 +46,7 @@ export default function PlanPage() {
           plan.decomposition &&
           plan.roadmap &&
           plan.recommendations &&
+          plan.opportunityScoring &&
           plan.conflicts &&
           plan.ambiguities &&
           plan.decisions &&
@@ -56,6 +57,15 @@ export default function PlanPage() {
           plan.analytics &&
           plan.approvals &&
           plan.orchestration &&
+          plan.decisionEngine &&
+          plan.decisionLedger &&
+          plan.decisionReevaluation &&
+          plan.productGraph &&
+          plan.portfolio &&
+          plan.portfolio.options?.length >= 2 &&
+          plan.monitoring &&
+          plan.productLoop &&
+          plan.productLoop.mode &&
           plan.priorities.every((item) => item.factors?.length === 7) && <PlanDocument plan={plan} />}
       </main>
     </div>

@@ -210,6 +210,16 @@ function priorityGate(plan: ProductPlan): ApprovalGate | null {
       evidenceTag: "stated",
     });
   }
+  const signal = plan.monitoring?.signals.find((item) => item.status === "investigating");
+  if (signal) {
+    return gate({
+      kind: "priority",
+      proposal: `Investigate ${signal.feature} before a product decision.`,
+      evidence: [signal.change, signal.investigation, ...signal.causes.slice(0, 2).map((item) => item.text)],
+      risk: "Acting on an anomaly without a pre/post comparison can freeze the wrong fix.",
+      evidenceTag: signal.evidence,
+    });
+  }
   const laterRec = plan.recommendations.find((item) => {
     const feature = plan.features.find((row) => row.id === item.featureId);
     return feature?.scope === "later";

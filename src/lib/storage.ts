@@ -40,7 +40,9 @@ export function loadMemoryLocal(): ProductMemory {
   if (!raw) return emptyMemory();
   try {
     const parsed = JSON.parse(raw) as ProductMemory;
-    return parsed?.items ? parsed : emptyMemory();
+    return parsed?.items
+      ? { ...emptyMemory(), ...parsed, products: parsed.products ?? (parsed.product ? [parsed.product] : []), ledger: parsed.ledger ?? [], nextDecisionNumber: parsed.nextDecisionNumber ?? 1 }
+      : emptyMemory();
   } catch {
     return emptyMemory();
   }
@@ -65,7 +67,12 @@ export async function fetchMemory(): Promise<ProductMemory> {
   }
 }
 
-export async function saveMemoryRemote(body: { feedback?: string; metrics?: string; clear?: boolean }) {
+export async function saveMemoryRemote(body: {
+  feedback?: string;
+  metrics?: string;
+  ledger?: import("./types").LedgerEntry[];
+  clear?: boolean;
+}) {
   const response = await fetch("/api/memory", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

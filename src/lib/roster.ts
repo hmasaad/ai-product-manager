@@ -77,6 +77,11 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
     detail: "An opportunity, the evidence, impact, cost, risks, confidence, and unknowns.",
   },
   {
+    id: "score",
+    label: "Opportunity Scoring",
+    detail: "Customer, business, alignment, reach, confidence, effort, risk, and evidence quality, each with a reason.",
+  },
+  {
     id: "experiment",
     label: "Experiment Planning",
     detail: "Hypothesis, prototype, metric, success threshold, then Build / Modify / Abandon.",
@@ -95,6 +100,41 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
     id: "approval",
     label: "Human Approval Gates",
     detail: "Strategy, scope, priority, roadmap, and production wait on a person.",
+  },
+  {
+    id: "decide",
+    label: "Product Decision Engine",
+    detail: "Options, evidence, trade-offs, and missing information. A person chooses.",
+  },
+  {
+    id: "ledger",
+    label: "Decision Ledger",
+    detail: "Numbered records of significant decisions, so later questions have an answer.",
+  },
+  {
+    id: "reevaluate",
+    label: "Decision Re-evaluation",
+    detail: "New evidence is checked against old assumptions. A changed assumption can reopen a decision.",
+  },
+  {
+    id: "graph",
+    label: "Product Knowledge Graph",
+    detail: "Customer to outcome, with decisions, risks, experiments, and metrics on the requirement.",
+  },
+  {
+    id: "portfolio",
+    label: "Portfolio Intelligence",
+    detail: "Products, capacity, and evidence become bets, trade-offs, and missing information. A person chooses.",
+  },
+  {
+    id: "monitor",
+    label: "Autonomous Product Monitoring",
+    detail: "Metrics, feedback, and experiments. An anomaly is investigated before a decision.",
+  },
+  {
+    id: "loop",
+    label: "Autonomous Product Loop",
+    detail: "Observe through propose can run. Validate, decide, and execute wait on a person.",
   },
   {
     id: "handoff",

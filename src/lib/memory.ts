@@ -1,8 +1,10 @@
+import { mergeLedgerEntries } from "./ledger";
 import { contentWords } from "./text";
 import type {
   ContextHit,
   Evidence,
   Judgment,
+  LedgerEntry,
   MemoryItem,
   MemoryKind,
   ProductContext,
@@ -28,8 +30,15 @@ export const MEMORY_KINDS: { kind: MemoryKind; label: string }[] = [
 const LIMITATION = /kubernetes|microservice|offline|codebase|okta|identity|no cell|cannot live|one codebase|managed app/i;
 const DECISION = /do not|don't|remains the|held for later|no microservices|no kubernetes/i;
 
+function addProduct(products: string[], name: string) {
+  const clean = name.replace(/\s+/g, " ").trim();
+  if (clean.length < 2) return products;
+  if (products.some((item) => item.toLowerCase() === clean.toLowerCase())) return products;
+  return [...products, clean];
+}
+
 export function emptyMemory(): ProductMemory {
-  return { product: "", updatedAt: "", items: [] };
+  return { product: "", products: [], updatedAt: "", items: [], ledger: [], nextDecisionNumber: 1 };
 }
 
 export function emptyContext(): ProductContext {
@@ -55,8 +64,46 @@ function add(
   items.push({ id, kind, text: clean.slice(0, 500), evidence, source, at });
 }
 
+function rememberReviews(items: MemoryItem[], plan: ProductPlan, source: string, at: string) {
+  for (const item of plan.decisionReevaluation?.cases ?? []) {
+    if (item.verdict !== "review") continue;
+    add(
+      items,
+      "decision",
+      `Re-evaluation: ${item.recommendation} ${item.warning} ${item.assumption} New evidence: ${item.evidence.text}`,
+      source,
+      at,
+    );
+  }
+}
+
 export function rememberPlan(memory: ProductMemory, plan: ProductPlan): ProductMemory {
-  if (plan.maturity === "problem") return memory;
+  if (plan.maturity === "problem") {
+    const recorded = (plan.decisionLedger?.entries ?? []).filter((item) => item.status === "recorded" && item.number > 0);
+    const reviews = (plan.decisionReevaluation?.cases ?? []).filter((item) => item.verdict === "review");
+    const monitors = plan.monitoring?.signals ?? [];
+    if (!recorded.length && !reviews.length && !monitors.length) return memory;
+    const items = [...memory.items];
+    rememberReviews(items, plan, plan.title, plan.createdAt);
+    for (const signal of monitors) {
+      add(
+        items,
+        "metric",
+        `Monitor: ${signal.feature}. ${signal.change} Investigation: ${signal.investigation} Confidence: ${signal.confidence}.`,
+        plan.title,
+        plan.createdAt,
+        signal.evidence,
+      );
+    }
+    const ledger = mergeLedgerEntries(memory.ledger ?? [], recorded);
+    return {
+      ...memory,
+      products: memory.products ?? [],
+      items,
+      ledger,
+      nextDecisionNumber: ledger.length ? Math.max(...ledger.map((item) => item.number)) + 1 : memory.nextDecisionNumber ?? 1,
+    };
+  }
   const items = [...memory.items];
   const source = plan.title;
   const at = plan.createdAt;
@@ -103,6 +150,36 @@ export function rememberPlan(memory: ProductMemory, plan: ProductPlan): ProductM
       experiment.evidence,
     );
   }
+  if (plan.portfolio?.question) {
+    const chosen = plan.portfolio.options.find((item) => item.id === plan.portfolio.record.chosenOptionId);
+    add(
+      items,
+      "decision",
+      `Portfolio record (${plan.portfolio.record.status}): ${plan.portfolio.question}${chosen ? ` Chose: ${chosen.title}` : ` Options: ${plan.portfolio.options.map((item) => item.title).join(" · ")}`}`,
+      source,
+      at,
+    );
+  }
+  if (plan.decisionEngine?.question) {
+    const chosen = plan.decisionEngine.options.find((item) => item.id === plan.decisionEngine.record.chosenOptionId);
+    add(
+      items,
+      "decision",
+      `Decision record (${plan.decisionEngine.record.status}): ${plan.decisionEngine.question}${chosen ? ` Chose: ${chosen.title}` : ` Options: ${plan.decisionEngine.options.map((item) => item.title).join(" · ")}`}`,
+      source,
+      at,
+    );
+  }
+  for (const entry of plan.decisionLedger?.entries ?? []) {
+    add(
+      items,
+      "decision",
+      `Decision #${entry.number}: ${entry.question}${entry.decision ? ` Decision: ${entry.decision}` : ""}`,
+      source,
+      at,
+    );
+  }
+  rememberReviews(items, plan, source, at);
   for (const gate of plan.approvals?.gates ?? []) {
     add(
       items,
@@ -122,6 +199,16 @@ export function rememberPlan(memory: ProductMemory, plan: ProductPlan): ProductM
       add(items, "feedback", `Analytics: ${problem} Opportunity: ${opportunity}`, source, at);
     }
   }
+  for (const signal of plan.monitoring?.signals ?? []) {
+    add(
+      items,
+      "metric",
+      `Monitor: ${signal.feature}. ${signal.change} Investigation: ${signal.investigation} Confidence: ${signal.confidence}.`,
+      source,
+      at,
+      signal.evidence,
+    );
+  }
   for (const sprint of plan.roadmap?.sprints ?? []) {
     const names = sprint.featureIds
       .map((id) => plan.features.find((feature) => feature.id === id)?.name ?? id)
@@ -132,10 +219,14 @@ export function rememberPlan(memory: ProductMemory, plan: ProductPlan): ProductM
   for (const kind of MEMORY_KINDS) {
     capped.push(...items.filter((item) => item.kind === kind.kind).slice(-40));
   }
+  const ledger = mergeLedgerEntries(memory.ledger ?? [], plan.decisionLedger?.entries ?? []).slice(-80);
   return {
     product: plan.title || memory.product,
+    products: addProduct(memory.products ?? [], plan.title),
     updatedAt: at,
     items: capped,
+    ledger,
+    nextDecisionNumber: ledger.length ? Math.max(...ledger.map((item) => item.number)) + 1 : memory.nextDecisionNumber ?? 1,
   };
 }
 
@@ -147,7 +238,7 @@ export function rememberNotes(
   const at = notes.at ?? new Date().toISOString();
   for (const line of splitNotes(notes.feedback ?? "")) add(items, "feedback", line, "User feedback", at);
   for (const line of splitNotes(notes.metrics ?? "")) add(items, "metric", line, "Product metrics", at);
-  return { ...memory, updatedAt: at, items };
+  return { ...memory, products: memory.products ?? [], updatedAt: at, items, ledger: memory.ledger ?? [], nextDecisionNumber: memory.nextDecisionNumber ?? 1 };
 }
 
 function splitNotes(text: string) {
@@ -271,5 +362,27 @@ export function mergeMemory(left: ProductMemory, right: ProductMemory): ProductM
     if (!items.some((current) => current.id === item.id)) items.push(item);
   }
   const newer = left.updatedAt >= right.updatedAt ? left : right;
-  return { product: newer.product, updatedAt: newer.updatedAt, items };
+  const ledger = mergeLedgerEntries(left.ledger ?? [], right.ledger ?? []);
+  let products = [...(left.products ?? [])];
+  for (const name of [...(right.products ?? []), left.product, right.product]) {
+    products = addProduct(products, name);
+  }
+  return {
+    product: newer.product,
+    products,
+    updatedAt: newer.updatedAt,
+    items,
+    ledger,
+    nextDecisionNumber: Math.max(left.nextDecisionNumber ?? 1, right.nextDecisionNumber ?? 1, ledger.length ? Math.max(...ledger.map((item) => item.number)) + 1 : 1),
+  };
+}
+
+export function rememberLedger(memory: ProductMemory, entries: LedgerEntry[]): ProductMemory {
+  const ledger = mergeLedgerEntries(memory.ledger ?? [], entries);
+  return {
+    ...memory,
+    updatedAt: new Date().toISOString(),
+    ledger,
+    nextDecisionNumber: ledger.length ? Math.max(...ledger.map((item) => item.number)) + 1 : memory.nextDecisionNumber ?? 1,
+  };
 }

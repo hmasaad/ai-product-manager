@@ -97,10 +97,18 @@ export async function runProductManager(input: {
   send("risk");
   send("priority");
   send("recommend");
+  send("score");
   send("experiment");
   send("analytics");
   send("roadmap");
   send("approval");
+  send("decide");
+  send("ledger");
+  send("reevaluate");
+  send("graph");
+  send("portfolio");
+  send("monitor");
+  send("loop");
   send("handoff");
 
   const plan = planFromJudgment({

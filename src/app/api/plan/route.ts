@@ -1,5 +1,5 @@
 import { runProductManager } from "@/lib/agent";
-import { mergeMemory, rememberPlan } from "@/lib/memory";
+import { emptyMemory, mergeMemory, rememberPlan } from "@/lib/memory";
 import { friendlyModelError } from "@/lib/model-errors";
 import { loadMemory, saveLatest, saveMemory } from "@/lib/store";
 import type { ProductMemory, ProductPlan } from "@/lib/types";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       };
       try {
         let plan: ProductPlan | null = null;
-        const remembered = mergeMemory(await loadMemory(), memory ?? { product: "", updatedAt: "", items: [] });
+        const remembered = mergeMemory(await loadMemory(), memory ?? emptyMemory());
         await runProductManager({
           brief,
           existing,

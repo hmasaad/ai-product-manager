@@ -93,6 +93,18 @@ export const REPORT_EXPORT_EXISTING = `- 143 support requests
 - 27% of users encountered the issue
 - 3 related feature requests`;
 
+export const REPORT_SIGNAL_BRIEF = `Product monitor for Report Export.`;
+
+export const REPORT_SIGNAL_EXISTING = `Feature: Report Export
+
+Conversion decreased 17%.
+
+Potential causes:
+- New UI introduced
+- Export latency increased
+- Error rate increased
+`;
+
 export const REPORT_USAGE_BRIEF = `Saved report templates launched. Usage is declining.`;
 
 export const REPORT_USAGE_EXISTING = `Product analytics — last 14 days vs prior 14 days
@@ -121,6 +133,56 @@ This is a production-impacting change: the live report creator switches to templ
 `;
 
 export const BILLING_BRIEF = `Reduce failed payment completion. Do not redesign the whole billing portal.`;
+
+export const OFFLINE_REPORTS_BRIEF = `Decision #142
+
+Question:
+Should we introduce offline report generation?
+
+Options:
+A. Fully offline
+B. Queue and sync
+C. Online only
+
+Evidence:
+Inspectors complete work in poor rural coverage.
+
+Constraints:
+CityWorks remains the work-order system of record.
+iOS and Android from one codebase.
+
+Risks:
+A fully offline client can diverge from the official record.
+
+Assumptions:
+Field work happens without cell signal for a full shift.
+Users will sync when they reconnect.
+
+Decision:
+B. Queue and sync
+
+Reason:
+Inspectors need to capture without signal. The official record still lands after reconnect. Fully offline keeps a second system of record.
+
+Owner:
+Product
+
+Date:
+2026-03-12
+`;
+
+export const OFFLINE_STALE_EXISTING = `Inspectors now have continuous LTE on every assigned route.
+The assumption that field work happens without cell signal for a full shift no longer holds.
+`;
+
+export const OFFLINE_REEVAL_BRIEF = `Decision #142 should be re-checked.
+
+Original assumption:
+Users rarely need offline access.
+
+6 months later:
+Offline usage increased 38%.
+`;
 
 export const BILLING_EXISTING = `Billing portal — last 30 days
 

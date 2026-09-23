@@ -20,10 +20,18 @@ export type StepId =
   | "risk"
   | "priority"
   | "recommend"
+  | "score"
   | "experiment"
   | "analytics"
   | "roadmap"
   | "approval"
+  | "decide"
+  | "ledger"
+  | "reevaluate"
+  | "graph"
+  | "portfolio"
+  | "monitor"
+  | "loop"
   | "handoff";
 
 export type ProductInput = {
@@ -281,8 +289,11 @@ export type MemoryItem = {
 
 export type ProductMemory = {
   product: string;
+  products: string[];
   updatedAt: string;
   items: MemoryItem[];
+  ledger: LedgerEntry[];
+  nextDecisionNumber: number;
 };
 
 export type ContextHit = {
@@ -505,6 +516,327 @@ export type Orchestration = {
   decision: string;
 };
 
+export type DecisionContextKind = "user" | "business" | "technical";
+
+export type DecisionFact = {
+  text: string;
+  evidence: Evidence;
+};
+
+export type DecisionContext = {
+  kind: DecisionContextKind;
+  lines: DecisionFact[];
+};
+
+export type DecisionOption = {
+  id: string;
+  title: string;
+  summary: string;
+  evidence: DecisionFact[];
+  tradeoffs: string[];
+  risks: string[];
+  missing: string[];
+};
+
+export type DecisionRecord = {
+  id: string;
+  question: string;
+  status: "pending" | "chosen" | "deferred";
+  chosenOptionId?: string;
+  rationale?: string;
+  at?: string;
+};
+
+export type DecisionEngine = {
+  note: string;
+  question: string;
+  ascii: string;
+  contexts: DecisionContext[];
+  options: DecisionOption[];
+  missing: string[];
+  record: DecisionRecord;
+};
+
+export type LedgerKind = "architecture" | "product";
+
+export type AssumptionHealth = "valid" | "untested" | "stale";
+
+export type LedgerOption = {
+  key: string;
+  title: string;
+};
+
+export type LedgerAssumption = {
+  text: string;
+  health: AssumptionHealth;
+  note?: string;
+};
+
+export type LedgerEntry = {
+  number: number;
+  id: string;
+  kind: LedgerKind;
+  question: string;
+  options: LedgerOption[];
+  evidence: DecisionFact[];
+  constraints: string[];
+  risks: string[];
+  assumptions: LedgerAssumption[];
+  decision: string;
+  reason: string;
+  owner: string;
+  date: string;
+  status: "open" | "recorded";
+};
+
+export type LedgerAnswer = {
+  query: string;
+  kind: "why" | "assumptions" | "search";
+  entries: LedgerEntry[];
+  answer: string;
+};
+
+export type DecisionLedger = {
+  note: string;
+  ascii: string;
+  entries: LedgerEntry[];
+  nextNumber: number;
+};
+
+export type ReevaluationVerdict = "hold" | "review";
+
+export type ReevaluationCase = {
+  decisionNumber: number;
+  question: string;
+  decision: string;
+  assumption: string;
+  evidence: DecisionFact;
+  changed: boolean;
+  warning: string;
+  affected: string[];
+  recommendation: string;
+  verdict: ReevaluationVerdict;
+};
+
+export type DecisionReevaluation = {
+  note: string;
+  ascii: string;
+  cases: ReevaluationCase[];
+};
+
+export type GraphNodeKind =
+  | "customer"
+  | "problem"
+  | "opportunity"
+  | "feature"
+  | "requirement"
+  | "decision"
+  | "risk"
+  | "experiment"
+  | "metric"
+  | "outcome";
+
+export type GraphNode = {
+  id: string;
+  kind: GraphNodeKind;
+  label: string;
+  evidence: Evidence;
+  ref?: string;
+};
+
+export type GraphEdge = {
+  from: string;
+  to: string;
+};
+
+export type GraphAnswer = {
+  query: string;
+  kind: "biggest" | "weak" | "assumptions" | "feedback" | "search";
+  nodes: GraphNode[];
+  answer: string;
+};
+
+export type ProductGraph = {
+  note: string;
+  ascii: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type OpportunityFactorKey =
+  | "customerImpact"
+  | "businessImpact"
+  | "strategicAlignment"
+  | "reach"
+  | "confidence"
+  | "effort"
+  | "risk"
+  | "evidenceQuality";
+
+export type OpportunityFactor = {
+  key: OpportunityFactorKey;
+  label: string;
+  sign: 1 | -1;
+  score: number;
+  reason: string;
+  evidence: Evidence;
+};
+
+export type OpportunityScore = {
+  id: string;
+  opportunity: string;
+  recommendationId?: string;
+  featureId?: string;
+  factors: OpportunityFactor[];
+  score: number;
+  rationale: string;
+};
+
+export type OpportunityScoring = {
+  note: string;
+  ascii: string;
+  items: OpportunityScore[];
+};
+
+export type PortfolioFindingKind =
+  | "duplicate"
+  | "conflict"
+  | "dependency"
+  | "constraint"
+  | "gap"
+  | "evidence"
+  | "assumption";
+
+export type PortfolioInitiative = {
+  id: string;
+  product: string;
+  name: string;
+  evidence: Evidence;
+};
+
+export type PortfolioProduct = {
+  name: string;
+  features: string[];
+  evidence: Evidence;
+};
+
+export type PortfolioFinding = {
+  id: string;
+  kind: PortfolioFindingKind;
+  title: string;
+  detail: string;
+  products: string[];
+  initiatives: string[];
+  evidence: Evidence;
+};
+
+export type PortfolioBetKind = "invest" | "pause" | "combine" | "validate" | "sequence" | "hold";
+export type PortfolioContextKind = "products" | "capacity" | "evidence";
+
+export type PortfolioBet = {
+  id: string;
+  kind: PortfolioBetKind;
+  title: string;
+  summary: string;
+  evidence: { text: string; evidence: Evidence }[];
+  tradeoffs: string[];
+  risks: string[];
+  missing: string[];
+  products: string[];
+};
+
+export type PortfolioRecord = {
+  id: string;
+  question: string;
+  status: "pending" | "chosen";
+  chosenOptionId?: string;
+  rationale?: string;
+  at?: string;
+};
+
+export type ProductPortfolio = {
+  note: string;
+  ascii: string;
+  engineAscii: string;
+  question: string;
+  contexts: { kind: PortfolioContextKind; lines: { text: string; evidence: Evidence }[] }[];
+  products: PortfolioProduct[];
+  findings: PortfolioFinding[];
+  options: PortfolioBet[];
+  missing: string[];
+  record: PortfolioRecord;
+};
+
+export type MonitorConfidence = "high" | "medium" | "low";
+export type MonitorStatus = "investigating" | "approved" | "closed";
+export type MonitorKind = "opportunity" | "risk";
+
+export type MonitorCause = {
+  text: string;
+  evidence: Evidence;
+};
+
+export type MonitorSignal = {
+  id: string;
+  warning: string;
+  feature: string;
+  change: string;
+  causes: MonitorCause[];
+  confidence: MonitorConfidence;
+  confidenceNote: string;
+  investigation: string;
+  kind: MonitorKind;
+  status: MonitorStatus;
+  evidence: Evidence;
+};
+
+export type ProductMonitor = {
+  note: string;
+  ascii: string;
+  metrics: string[];
+  feedback: string[];
+  experiments: string[];
+  signals: MonitorSignal[];
+};
+
+export type LoopStageId =
+  | "observe"
+  | "understand"
+  | "discover"
+  | "analyze"
+  | "propose"
+  | "validate"
+  | "decide"
+  | "plan"
+  | "execute"
+  | "measure"
+  | "learn";
+
+export type LoopStageStatus = "done" | "current" | "waiting";
+
+export type LoopStage = {
+  id: LoopStageId;
+  label: string;
+  text: string;
+  status: LoopStageStatus;
+  evidence: Evidence;
+};
+
+export type LoopMode = "autonomous" | "waiting";
+
+export type ProductLoop = {
+  note: string;
+  ascii: string;
+  engineAscii: string;
+  current: LoopStageId;
+  next: LoopStageId;
+  mode: LoopMode;
+  authorization: AuthorizationLevel;
+  action: string;
+  blocker: string;
+  stages: LoopStage[];
+};
+
 export type ChangeImpact = {
   change: string;
   severity: ImpactLevel;
@@ -553,12 +885,20 @@ export type ProductPlan = {
   decisions: TrackedDecision[];
   conflicts: RequirementConflict[];
   recommendations: Recommendation[];
+  opportunityScoring: OpportunityScoring;
   impacts: ChangeImpact[];
   riskAnalysis: RiskAnalysis;
   experiments: ProductExperiment[];
   analytics: AnalyticsFeedback;
   approvals: ApprovalBoard;
   orchestration: Orchestration;
+  decisionEngine: DecisionEngine;
+  decisionLedger: DecisionLedger;
+  decisionReevaluation: DecisionReevaluation;
+  productGraph: ProductGraph;
+  portfolio: ProductPortfolio;
+  monitoring: ProductMonitor;
+  productLoop: ProductLoop;
   traceability: Traceability;
   decomposition: Decomposition;
   discovery: Discovery;

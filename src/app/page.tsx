@@ -18,6 +18,10 @@ import {
   REPORT_TEMPLATES_BRIEF,
   REPORT_USAGE_BRIEF,
   REPORT_USAGE_EXISTING,
+  REPORT_SIGNAL_BRIEF,
+  REPORT_SIGNAL_EXISTING,
+  OFFLINE_REPORTS_BRIEF,
+  OFFLINE_REEVAL_BRIEF,
   STRATEGY_BET_BRIEF,
   ROADMAP_BRIEF,
   DELETE_TX_BRIEF,
@@ -260,6 +264,17 @@ export default function HomePage() {
               type="button"
               className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
               onClick={() => {
+                setBrief(REPORT_SIGNAL_BRIEF);
+                setExisting(REPORT_SIGNAL_EXISTING);
+                setConstraints("");
+              }}
+            >
+              Report signal
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
                 setBrief(STRATEGY_BET_BRIEF);
                 setExisting("");
                 setConstraints("");
@@ -277,6 +292,28 @@ export default function HomePage() {
               }}
             >
               Export reports
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(OFFLINE_REPORTS_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Offline reports
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(OFFLINE_REEVAL_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Offline usage
             </button>
             <button
               type="button"

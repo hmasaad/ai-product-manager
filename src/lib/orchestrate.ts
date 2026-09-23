@@ -40,11 +40,11 @@ export const SPECIALIST_NAME: Record<SpecialistId, string> = {
 export const SPECIALIST_ROLE: Record<SpecialistId, string> = {
   research: "Users, problems, goals, and an MVP from the source.",
   requirements: "Scope, ambiguities, conflicts, and the PRD.",
-  analytics: "Events, errors, and behavior after launch.",
+  analytics: "Events, errors, behavior, and the product monitor after launch.",
   market: "A competitor landscape from the source. Totals stay unnamed unless stated.",
   risk: "Product, technical, security, UX, business, compliance, and operational risk.",
   experiment: "Hypothesis, prototype, metric, and a pending Build / Modify / Abandon.",
-  decision: "Recommendations, roadmap, and human approval gates.",
+  decision: "Options, evidence, scored opportunities, portfolio bets, trade-offs, missing information, a human record, then the ledger.",
 };
 
 export const STEP_TO_AGENT: Record<StepId, SpecialistId> = {
@@ -63,10 +63,18 @@ export const STEP_TO_AGENT: Record<StepId, SpecialistId> = {
   risk: "risk",
   priority: "decision",
   recommend: "decision",
+  score: "decision",
   experiment: "experiment",
   analytics: "analytics",
   roadmap: "decision",
   approval: "decision",
+  decide: "decision",
+  ledger: "decision",
+  reevaluate: "decision",
+  graph: "decision",
+  portfolio: "decision",
+  monitor: "analytics",
+  loop: "decision",
   handoff: "decision",
 };
 
@@ -160,18 +168,16 @@ function experimentReport(plan: ProductPlan): SpecialistReport {
 
 function decisionReport(plan: ProductPlan): SpecialistReport {
   const pending = pendingMandatory(plan);
-  const gates = plan.approvals.gates.slice(0, 4).map((item) => `${APPROVAL_LABEL[item.kind]}: ${item.status}`);
+  const engine = plan.decisionEngine;
+  const options = (engine?.options ?? []).map((item) => item.title);
   const rec = plan.recommendations[0];
   return report(
     "decision",
-    [
-      rec ? `Opportunity: ${rec.opportunity} (${rec.confidence.toFixed(2)})` : "",
-      ...gates,
-    ],
-    pending.length
-      ? `${pending.length} mandatory gates wait on a person. The decision is not committed.`
-      : rec
-        ? `Product decision: ${rec.opportunity}.`
+    options.length ? options : [rec ? `Opportunity: ${rec.opportunity}` : "", ...plan.approvals.gates.slice(0, 2).map((item) => `${APPROVAL_LABEL[item.kind]}: ${item.status}`)],
+    engine?.options.length
+      ? `${engine.options.length} options. ${engine.record.status === "pending" ? "A person still chooses." : "A person chose an option."}${pending.length ? ` ${pending.length} mandatory gates wait.` : ""}`
+      : pending.length
+        ? `${pending.length} mandatory gates wait on a person. The decision is not committed.`
         : "Product decision: the plan is ready for a person to sign.",
   );
 }
