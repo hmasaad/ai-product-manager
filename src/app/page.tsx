@@ -12,10 +12,21 @@ import {
   FARMER_BRIEF,
   FIELD_MANAGEMENT_BRIEF,
   HARBOR_BRIEF,
+  EXPORT_REPORTS_BRIEF,
+  REPORT_EXPORT_BRIEF,
+  REPORT_EXPORT_EXISTING,
+  REPORT_TEMPLATES_BRIEF,
+  REPORT_USAGE_BRIEF,
+  REPORT_USAGE_EXISTING,
+  STRATEGY_BET_BRIEF,
   ROADMAP_BRIEF,
+  DELETE_TX_BRIEF,
+  TRANSACTION_ARCHITECTURE,
+  TRANSACTION_BRIEF,
+  TRANSACTION_EXISTING,
 } from "@/lib/samples";
-import { fetchStatus, savePlan } from "@/lib/storage";
-import type { AgentStepEvent, ProductPlan, StepId } from "@/lib/types";
+import { fetchMemory, fetchStatus, savePlan } from "@/lib/storage";
+import type { AgentStepEvent, ProductMemory, ProductPlan, StepId } from "@/lib/types";
 
 export default function HomePage() {
   const router = useRouter();
@@ -27,9 +38,11 @@ export default function HomePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [memory, setMemory] = useState<ProductMemory | null>(null);
 
   useEffect(() => {
     void fetchStatus().then((status) => setConfigured(status.configured));
+    void fetchMemory().then(setMemory);
   }, []);
 
   async function onFile(file: File) {
@@ -47,7 +60,7 @@ export default function HomePage() {
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief, existing, constraints }),
+        body: JSON.stringify({ brief, existing, constraints, memory }),
       });
       if (!response.ok && response.headers.get("content-type")?.includes("application/json")) {
         const payload = (await response.json()) as { error?: string };
@@ -87,9 +100,9 @@ export default function HomePage() {
             Turn a problem into a plan a team can build.
           </h1>
           <p className="mt-4 max-w-xl text-ink-soft">
-            Discovery names the users, the problem, the goals, the assumptions, the constraints, the
-            competitors, the metrics, and an MVP. The PRD then writes the overview, stories, flows,
-            acceptance, edge cases, and future scope. A one-line build request stays marked as a proposal.
+            The product manager orchestrates specialists: research, requirements, analytics, market,
+            risk, and experiment. Their outputs meet at a product decision. A one-line build request
+            stays marked as a proposal.
           </p>
 
           <label className="mt-8 block">
@@ -210,6 +223,83 @@ export default function HomePage() {
             >
               Billing analytics
             </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(REPORT_EXPORT_BRIEF);
+                setExisting(REPORT_EXPORT_EXISTING);
+                setConstraints("");
+              }}
+            >
+              Report export
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(REPORT_TEMPLATES_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Report templates
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(REPORT_USAGE_BRIEF);
+                setExisting(REPORT_USAGE_EXISTING);
+                setConstraints("");
+              }}
+            >
+              Report usage
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(STRATEGY_BET_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Strategy bet
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(EXPORT_REPORTS_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Export reports
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(TRANSACTION_BRIEF);
+                setExisting(TRANSACTION_EXISTING);
+                setConstraints(TRANSACTION_ARCHITECTURE);
+              }}
+            >
+              Transaction conflict
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(DELETE_TX_BRIEF);
+                setExisting(TRANSACTION_EXISTING);
+                setConstraints(TRANSACTION_ARCHITECTURE);
+              }}
+            >
+              Delete transactions
+            </button>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -229,6 +319,14 @@ export default function HomePage() {
                   : "No model key. Stated scope stays put. A one-line build request becomes a proposed MVP."}
             </p>
           </div>
+          <p className="mt-4 text-sm text-ink-soft">
+            {memory && memory.items.length > 0
+              ? `Product context remembers ${memory.items.length} items from ${memory.product}. The next plan keeps recorded features and decisions.`
+              : "Product context is empty. A finished plan is remembered for the next request."}{" "}
+            <a href="/context" className="text-navy underline">
+              Open context
+            </a>
+          </p>
           {error && <p className="mt-4 text-sm text-stamp">{error}</p>}
           {message && running && (
             <p className="mt-4 text-sm text-ink-soft" aria-live="polite">

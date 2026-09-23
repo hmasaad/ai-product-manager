@@ -8,11 +8,22 @@ export type StepId =
   | "research"
   | "problem"
   | "personas"
+  | "market"
+  | "ambiguity"
+  | "assumption"
   | "prd"
+  | "conflict"
   | "features"
   | "stories"
+  | "trace"
+  | "impact"
+  | "risk"
   | "priority"
+  | "recommend"
+  | "experiment"
+  | "analytics"
   | "roadmap"
+  | "approval"
   | "handoff";
 
 export type ProductInput = {
@@ -246,6 +257,275 @@ export type Judgment = {
   risks: string[];
 };
 
+export type MemoryKind =
+  | "feature"
+  | "decision"
+  | "goal"
+  | "persona"
+  | "constraint"
+  | "prd"
+  | "limitation"
+  | "experiment"
+  | "roadmap"
+  | "feedback"
+  | "metric";
+
+export type MemoryItem = {
+  id: string;
+  kind: MemoryKind;
+  text: string;
+  evidence: Evidence;
+  source: string;
+  at: string;
+};
+
+export type ProductMemory = {
+  product: string;
+  updatedAt: string;
+  items: MemoryItem[];
+};
+
+export type ContextHit = {
+  request: string;
+  memoryId: string;
+  kind: MemoryKind;
+  text: string;
+};
+
+export type ImpactLevel = "high" | "medium" | "low";
+
+export type RecommendationFact = {
+  text: string;
+  evidence: Evidence;
+};
+
+export type DecisionStatus = "confirmed" | "assumption" | "inferred" | "unknown" | "needsValidation";
+
+export type TrackedDecision = {
+  id: string;
+  decision: string;
+  status: DecisionStatus;
+  validation?: string;
+};
+
+export type AmbiguitySeverity = "critical" | "important" | "minor";
+
+export type Ambiguity = {
+  id: string;
+  question: string;
+  severity: AmbiguitySeverity;
+  action: "must clarify" | "recommendation" | "reasonable assumption";
+  assumption?: string;
+};
+
+export type RequirementConflict = {
+  id: string;
+  newRequirement: string;
+  existingRequirement: string;
+  against: "requirement" | "architecture";
+  impact: ImpactLevel;
+  resolution: string;
+  rule: string;
+};
+
+export type Recommendation = {
+  id: string;
+  opportunity: string;
+  featureId?: string;
+  evidence: RecommendationFact[];
+  userImpact: { level: ImpactLevel; reason: string };
+  businessImpact: { level: ImpactLevel; reason: string };
+  technicalCost: { level: ImpactLevel; reason: string };
+  risks: string[];
+  confidence: number;
+  unknowns: string[];
+};
+
+export type TraceKind =
+  | "goal"
+  | "objective"
+  | "feature"
+  | "story"
+  | "acceptance"
+  | "technical"
+  | "task"
+  | "test"
+  | "problem";
+
+export type TraceStep = {
+  kind: TraceKind;
+  label: string;
+  ref?: string;
+};
+
+export type TraceChain = {
+  featureId: string;
+  feature: string;
+  down: TraceStep[];
+  why: TraceStep[];
+  asciiDown: string;
+  asciiWhy: string;
+};
+
+export type Traceability = {
+  note: string;
+  ascii: string;
+  chains: TraceChain[];
+};
+
+export type RiskKind =
+  | "product"
+  | "technical"
+  | "security"
+  | "ux"
+  | "business"
+  | "compliance"
+  | "operational";
+
+export type FeatureRisk = {
+  kind: RiskKind;
+  risk: string;
+  cause: string;
+  mitigation: string;
+  residual: string;
+};
+
+export type FeatureRiskRegister = {
+  featureId: string;
+  feature: string;
+  risks: FeatureRisk[];
+};
+
+export type RiskAnalysis = {
+  note: string;
+  registers: FeatureRiskRegister[];
+};
+
+export type ExperimentVerdict = "pending" | "build" | "modify" | "abandon";
+
+export type ProductExperiment = {
+  id: string;
+  idea: string;
+  hypothesis: string;
+  experiment: string;
+  metric: string;
+  successCriteria: string;
+  decision: ExperimentVerdict;
+  featureId?: string;
+  evidence: Evidence;
+};
+
+export type AnalyticsKind = "event" | "error" | "behavior";
+
+export type AnalyticsSignal = {
+  id: string;
+  kind: AnalyticsKind;
+  name: string;
+  detail: string;
+  prior?: number;
+  current?: number;
+  change?: string;
+  declining: boolean;
+  evidence: Evidence;
+};
+
+export type AnalyticsStageId =
+  | "launched"
+  | "declining"
+  | "investigates"
+  | "problem"
+  | "opportunity"
+  | "improvement";
+
+export type AnalyticsStage = {
+  id: AnalyticsStageId;
+  label: string;
+  text: string;
+  evidence: Evidence;
+};
+
+export type AnalyticsLoop = {
+  feature: string;
+  featureId?: string;
+  ascii: string;
+  stages: AnalyticsStage[];
+};
+
+export type AnalyticsFeedback = {
+  note: string;
+  ascii: string;
+  loopAscii: string;
+  signals: AnalyticsSignal[];
+  loops: AnalyticsLoop[];
+};
+
+export type ApprovalKind = "strategy" | "scope" | "priority" | "roadmap" | "production";
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type AuthorizationLevel = "automatic" | "review" | "mandatory";
+
+export type ApprovalGate = {
+  id: string;
+  kind: ApprovalKind;
+  proposal: string;
+  evidence: string[];
+  risk: string;
+  status: ApprovalStatus;
+  authorization: AuthorizationLevel;
+  commit: string;
+  evidenceTag: Evidence;
+};
+
+export type ApprovalBoard = {
+  note: string;
+  ascii: string;
+  gates: ApprovalGate[];
+};
+
+export type SpecialistId =
+  | "research"
+  | "requirements"
+  | "analytics"
+  | "market"
+  | "risk"
+  | "experiment"
+  | "decision";
+
+export type SpecialistReport = {
+  id: SpecialistId;
+  name: string;
+  role: string;
+  findings: string[];
+  output: string;
+};
+
+export type Orchestration = {
+  note: string;
+  ascii: string;
+  agents: SpecialistReport[];
+  decision: string;
+};
+
+export type ChangeImpact = {
+  change: string;
+  severity: ImpactLevel;
+  features: string[];
+  apis: string[];
+  database: string[];
+  screens: string[];
+  permissions: string[];
+  tests: string[];
+  documentation: string[];
+  security: string[];
+  ascii: string;
+};
+
+export type ProductContext = {
+  product: string;
+  recalled: number;
+  alreadyExists: ContextHit[];
+  conflicts: ContextHit[];
+};
+
 export type ProductPlan = {
   id: string;
   createdAt: string;
@@ -268,6 +548,18 @@ export type ProductPlan = {
   priorities: PriorityItem[];
   milestones: Milestone[];
   roadmap: Roadmap;
+  context: ProductContext;
+  ambiguities: Ambiguity[];
+  decisions: TrackedDecision[];
+  conflicts: RequirementConflict[];
+  recommendations: Recommendation[];
+  impacts: ChangeImpact[];
+  riskAnalysis: RiskAnalysis;
+  experiments: ProductExperiment[];
+  analytics: AnalyticsFeedback;
+  approvals: ApprovalBoard;
+  orchestration: Orchestration;
+  traceability: Traceability;
   decomposition: Decomposition;
   discovery: Discovery;
   prd: Prd;

@@ -17,9 +17,29 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
     detail: "Only the people the source supports.",
   },
   {
+    id: "market",
+    label: "Market Agent",
+    detail: "A competitor landscape from the source. Totals stay unnamed unless stated.",
+  },
+  {
+    id: "ambiguity",
+    label: "Ambiguity Detection",
+    detail: "Unclear requirements, classified as critical, important, or minor.",
+  },
+  {
+    id: "assumption",
+    label: "Assumption Tracking",
+    detail: "Every decision is confirmed, an assumption, inferred, unknown, or needs validation.",
+  },
+  {
     id: "prd",
     label: "PRD Generator",
     detail: "Overview, flows, acceptance, edge cases, analytics, risks, and future scope.",
+  },
+  {
+    id: "conflict",
+    label: "Requirements Conflict Detector",
+    detail: "New requirements against existing scope and architecture.",
   },
   {
     id: "features",
@@ -32,14 +52,49 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
     detail: "A story, acceptance lines, and tasks for each slice.",
   },
   {
+    id: "trace",
+    label: "Product → Engineering Traceability",
+    detail: "Goal to test downward, and API back to the customer problem.",
+  },
+  {
+    id: "impact",
+    label: "Change Impact Analysis",
+    detail: "A requirement change fans out to features, APIs, data, screens, tests, and security.",
+  },
+  {
+    id: "risk",
+    label: "Product Risk Analysis",
+    detail: "Product, technical, security, UX, business, compliance, and operational risk, each with a mitigation.",
+  },
+  {
     id: "priority",
     label: "Prioritization Engine",
     detail: "Business value, user impact, alignment, revenue, urgency, effort, and risk, each with a reason.",
   },
   {
+    id: "recommend",
+    label: "Evidence-Based Recommendations",
+    detail: "An opportunity, the evidence, impact, cost, risks, confidence, and unknowns.",
+  },
+  {
+    id: "experiment",
+    label: "Experiment Planning",
+    detail: "Hypothesis, prototype, metric, success threshold, then Build / Modify / Abandon.",
+  },
+  {
+    id: "analytics",
+    label: "Product Analytics Feedback",
+    detail: "Events, errors, and behavior. A decline becomes an investigated opportunity.",
+  },
+  {
     id: "roadmap",
     label: "Roadmap Generator",
     detail: "Sprints from dependencies, team size, and the week target.",
+  },
+  {
+    id: "approval",
+    label: "Human Approval Gates",
+    detail: "Strategy, scope, priority, roadmap, and production wait on a person.",
   },
   {
     id: "handoff",

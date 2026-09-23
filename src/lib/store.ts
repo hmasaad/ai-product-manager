@@ -1,8 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ProductPlan } from "./types";
+import { emptyMemory } from "./memory";
+import type { ProductMemory, ProductPlan } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "latest.json");
+const MEMORY = path.join(process.cwd(), "data", "memory.json");
 
 export async function saveLatest(plan: ProductPlan) {
   await mkdir(path.dirname(FILE), { recursive: true });
@@ -15,5 +17,21 @@ export async function loadLatest(): Promise<ProductPlan | null> {
     return JSON.parse(raw) as ProductPlan;
   } catch {
     return null;
+  }
+}
+
+export async function saveMemory(memory: ProductMemory) {
+  await mkdir(path.dirname(MEMORY), { recursive: true });
+  await writeFile(MEMORY, JSON.stringify(memory, null, 2), "utf8");
+}
+
+export async function loadMemory(): Promise<ProductMemory> {
+  try {
+    const raw = await readFile(MEMORY, "utf8");
+    const parsed = JSON.parse(raw) as ProductMemory;
+    if (!parsed || !Array.isArray(parsed.items)) return emptyMemory();
+    return parsed;
+  } catch {
+    return emptyMemory();
   }
 }

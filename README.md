@@ -51,6 +51,30 @@ Each factor is 1 to 5. When the source never mentions revenue, that factor is 1 
 
 The roadmap generator places features from dependencies and capacity. “20 proposed features, 3 developers, 8-week target” becomes 2-week sprints: a feature waits until its dependencies are already placed, and a sprint holds only as many developer-weeks as the team has.
 
+Product context remembers each finished plan, plus feedback and metrics you add on the Context page. The next request is checked against existing features, previous decisions, goals, personas, constraints, previous PRDs, technical limitations, experiments, and the roadmap. A repeat of recorded work, or a request that crosses a recorded decision, stays out of the new scope.
+
+A recommendation is not a bare “build this.” It names the opportunity, the evidence, user impact, business impact, technical cost, risks, a confidence score, and the unknowns. Confidence is a formula. Support volume, an encounter rate, and feature-request counts raise it. Missing revenue or a problem with no counts lower it.
+
+Every feature has a risk register: product, technical, security, UX, business, compliance, and operational. Each names the failure, the cause, the mitigation, and the residual uncertainty. A bare High is not a risk.
+
+A large feature starts as a hypothesis. Experiment planning writes the idea, the prototype, the primary metric, and the success threshold, then leaves the decision as Build, Modify, or Abandon until the test runs. Stated numbers such as ten users or a 30% reduction stay stated. A thin problem stays a validation experiment.
+
+Product analytics feeds the PM after launch. Events, errors, and user behavior are read from the existing product (and from metrics you remember). A launched feature whose usage is declining is investigated. A problem is named only from those signals. That becomes a product opportunity and a proposed improvement. A greenfield brief with no live telemetry stays empty.
+
+The PM does not commit on its own. Human approval gates sit after a proposal: evidence, risk, a person signs, then the decision commits. Gates cover product strategy, scope changes, priority changes, major roadmap decisions, and production-impacting changes. Authorization is risk-based. Priority waits for review. Strategy, scope, roadmap, and production are mandatory human. Nothing in those lanes runs automatically.
+
+The product manager is an orchestrator. Six specialists run the work: Product Research, Requirements, Analytics, Market, Risk, and Experiment. Their outputs meet at a Product Decision. Market is a competitor landscape from the source, not a TAM study.
+
+A requirement change has a blast radius: features, APIs, database, screens, permissions, tests, documentation, and security. That list is written into the architect brief and the developer brief.
+
+A feature is a chain from a business goal to a test case. A backend task is the API. Asking why that API exists walks back through the feature, the user story, the customer problem, and the business goal.
+
+Every generated decision carries a status: confirmed, assumption, inferred, unknown, or needs validation. A guessed default such as “Most users will export reports as PDF” stays an assumption, with a validation step, and does not become a requirement.
+
+Ambiguity detection runs before the PRD. A line such as “Users should be able to export reports” is opened into who, which reports, format, size, async work, permissions, and audit. Critical questions must be clarified. Important questions are recommendations. Minor questions become a labeled assumption. The PRD keeps those questions instead of inventing an answer.
+
+The conflict detector compares a new requirement to existing requirements and the architecture. An opposite claim — edit versus immutable, replace versus remains — becomes a conflict card with the impact and a suggested resolution. A repeated feature is context, not a conflict.
+
 ## Run
 
 ```bash

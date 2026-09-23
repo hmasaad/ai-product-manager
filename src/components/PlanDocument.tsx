@@ -1,22 +1,53 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { planMarkdown } from "@/lib/handoff";
 import { prdMarkdown } from "@/lib/prd";
+import { AMBIGUITY_NOTE } from "@/lib/ambiguity";
+import { ASSUMPTION_NOTE, STATUS_LABEL } from "@/lib/assumption";
+import { CONFLICT_NOTE } from "@/lib/conflict";
 import { SCORE_NOTE } from "@/lib/prioritize";
-import type { Decision, Evidence, Priority, ProductPlan, TaggedLine } from "@/lib/types";
+import { CONFIDENCE_NOTE } from "@/lib/recommend";
+import { IMPACT_NOTE } from "@/lib/impact";
+import { RISK_LABEL, RISK_NOTE } from "@/lib/risks";
+import { EXPERIMENT_ASCII, EXPERIMENT_CHOICES, EXPERIMENT_NOTE, experimentVerdictLabel } from "@/lib/experiment";
+import { ANALYTICS_KIND_LABEL, ANALYTICS_NOTE } from "@/lib/analytics";
+import {
+  APPROVAL_ASCII,
+  APPROVAL_LABEL,
+  APPROVAL_NOTE,
+  AUTHORIZATION_LABEL,
+  applyGateDecision,
+} from "@/lib/approval";
+import { KIND_LABEL, TRACE_NOTE, whyThis } from "@/lib/trace";
+import { ORCHESTRATE_NOTE } from "@/lib/orchestrate";
+import { saveMemoryRemote, savePlan } from "@/lib/storage";
+import type { AmbiguitySeverity, Decision, DecisionStatus, Evidence, ImpactLevel, Priority, ProductPlan, TaggedLine } from "@/lib/types";
 
 const SECTIONS = [
+  ["orchestrate", "Agents"],
+  ["context", "Context"],
   ["discovery", "Discovery"],
+  ["ambiguity", "Ambiguity"],
+  ["assumption", "Decisions"],
   ["prd", "PRD"],
   ["research", "Research"],
   ["problem", "Problem"],
   ["personas", "Personas"],
   ["requirements", "Requirements"],
+  ["conflict", "Conflicts"],
   ["decompose", "Decompose"],
   ["features", "Features"],
   ["stories", "Stories"],
+  ["trace", "Trace"],
+  ["impact", "Impact"],
+  ["risk", "Risks"],
   ["priority", "Priority"],
+  ["recommend", "Recommend"],
+  ["experiment", "Experiments"],
+  ["analytics", "Analytics"],
   ["roadmap", "Roadmap"],
+  ["approval", "Approvals"],
   ["handoff", "Handoff"],
 ] as const;
 
@@ -53,6 +84,26 @@ function priorityTone(priority: Priority): "navy" | "copper" | "ink" {
   return "ink";
 }
 
+function statusTone(status: DecisionStatus): "sage" | "copper" | "stamp" | "navy" | "ink" {
+  if (status === "confirmed") return "sage";
+  if (status === "assumption") return "copper";
+  if (status === "inferred") return "navy";
+  if (status === "needsValidation") return "stamp";
+  return "ink";
+}
+
+function severityTone(severity: AmbiguitySeverity): "stamp" | "copper" | "ink" {
+  if (severity === "critical") return "stamp";
+  if (severity === "important") return "copper";
+  return "ink";
+}
+
+function impactTone(level: ImpactLevel): "navy" | "copper" | "ink" {
+  if (level === "high") return "navy";
+  if (level === "medium") return "copper";
+  return "ink";
+}
+
 function decisionTone(decision: Decision): "navy" | "copper" | "ink" {
   if (decision === "now") return "navy";
   if (decision === "next") return "copper";
@@ -74,7 +125,22 @@ async function copy(text: string) {
 }
 
 export function PlanDocument({ plan }: { plan: ProductPlan }) {
+  const [whyQuery, setWhyQuery] = useState("");
+  const [live, setLive] = useState(plan);
   const featureName = (id: string) => plan.features.find((feature) => feature.id === id)?.name ?? id;
+  const whyChains = useMemo(() => whyThis(plan, whyQuery), [plan, whyQuery]);
+
+  function decide(gateId: string, status: "approved" | "rejected") {
+    const next = applyGateDecision(live, gateId, status);
+    setLive(next);
+    savePlan(next);
+    const gate = next.approvals.gates.find((item) => item.id === gateId);
+    if (gate) {
+      void saveMemoryRemote({
+        feedback: `${status === "approved" ? "Approved" : "Sent back"}: ${APPROVAL_LABEL[gate.kind]} — ${gate.proposal}`,
+      });
+    }
+  }
 
   return (
     <div className="lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-10">
@@ -143,6 +209,59 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           </button>
         </div>
 
+        <section id="orchestrate" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Specialized Agents</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{ORCHESTRATE_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {plan.orchestration?.ascii}
+          </pre>
+          <p className="mt-4 font-serif text-xl text-navy">{plan.orchestration?.decision}</p>
+          <ol className="mt-4 grid gap-4 md:grid-cols-2">
+            {(plan.orchestration?.agents ?? []).map((agent) => (
+              <li key={agent.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <h3 className="font-serif text-xl text-navy">{agent.name}</h3>
+                <p className="mt-1 text-sm text-ink-soft">{agent.role}</p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {agent.findings.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Handoff</p>
+                <p className="mt-1 text-sm leading-6">{agent.output}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="context" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product Context</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">
+            {plan.context && plan.context.recalled > 0
+              ? `Loaded ${plan.context.recalled} remembered items${plan.context.product ? ` from ${plan.context.product}` : ""}.`
+              : "No earlier PRD, feedback, or metric was loaded for this plan."}
+          </p>
+          {plan.context?.alreadyExists.length > 0 && (
+            <div className="mt-4">
+              <h3 className="font-medium">Already recorded</h3>
+              <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6">
+                {plan.context.alreadyExists.map((hit) => (
+                  <li key={hit.memoryId}>{hit.text}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {plan.context?.conflicts.length > 0 && (
+            <div className="mt-4">
+              <h3 className="font-medium">Earlier decision kept</h3>
+              <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6">
+                {plan.context.conflicts.map((hit) => (
+                  <li key={hit.memoryId}>{hit.text}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
         <section id="discovery" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Product Discovery</h2>
           <p className="mt-2 text-sm text-ink-soft">
@@ -194,6 +313,64 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               </ul>
             </>
           )}
+        </section>
+
+        <section id="ambiguity" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Ambiguities detected</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{AMBIGUITY_NOTE}</p>
+          {plan.ambiguities.length === 0 ? (
+            <p className="mt-4 rounded-2xl border border-rule bg-white/70 p-4 text-sm leading-6">
+              No ambiguity was left open in the source.
+            </p>
+          ) : (
+            <ol className="mt-4 space-y-3">
+              {plan.ambiguities.map((item, index) => (
+                <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-ink-soft">{index + 1}</span>
+                    <Pill tone={severityTone(item.severity)}>{item.severity}</Pill>
+                    <span className="text-xs text-ink-soft">{item.action}</span>
+                  </div>
+                  <p className="mt-2 font-serif text-xl text-navy">{item.question}</p>
+                  {item.assumption ? <p className="mt-2 text-sm leading-6 text-ink-soft">{item.assumption}</p> : null}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        <section id="assumption" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Assumption Tracking</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{ASSUMPTION_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">{`Decision
+├── Confirmed
+├── Assumption
+├── Inferred
+├── Unknown
+└── Needs validation`}</pre>
+          {(["confirmed", "assumption", "inferred", "unknown", "needsValidation"] as DecisionStatus[]).map((status) => {
+            const rows = plan.decisions.filter((item) => item.status === status);
+            if (!rows.length) return null;
+            return (
+              <div key={status} className="mt-6">
+                <h3 className="font-medium">{STATUS_LABEL[status]}</h3>
+                <ol className="mt-3 space-y-3">
+                  {rows.map((item) => (
+                    <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                      <Pill tone={statusTone(item.status)}>{STATUS_LABEL[item.status]}</Pill>
+                      <p className="mt-2 font-serif text-xl text-navy">{item.decision}</p>
+                      {item.validation ? (
+                        <>
+                          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Validation</p>
+                          <p className="mt-1 text-sm leading-6">{item.validation}</p>
+                        </>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })}
         </section>
 
         <section id="prd" className="mt-12 scroll-mt-6">
@@ -376,6 +553,38 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           )}
         </section>
 
+        <section id="conflict" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Requirement Conflicts</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{CONFLICT_NOTE}</p>
+          {plan.conflicts.length === 0 ? (
+            <p className="mt-4 rounded-2xl border border-rule bg-white/70 p-4 text-sm leading-6">
+              No requirement conflict was found.
+            </p>
+          ) : (
+            <ol className="mt-4 space-y-4">
+              {plan.conflicts.map((item) => (
+                <li key={item.id} className="rounded-2xl border border-stamp/30 bg-stamp/5 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Pill tone="stamp">Requirement Conflict</Pill>
+                    <Pill tone={impactTone(item.impact)}>{`${item.impact} impact`}</Pill>
+                    <span className="font-mono text-xs text-ink-soft">
+                      {item.against === "architecture" ? "Architecture" : "Existing requirement"}
+                    </span>
+                  </div>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">New</p>
+                  <p className="mt-1 font-serif text-xl leading-7 text-navy">{item.newRequirement}</p>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">
+                    {item.against === "architecture" ? "Architecture" : "Existing"}
+                  </p>
+                  <p className="mt-1 font-serif text-xl leading-7 text-navy">{item.existingRequirement}</p>
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Suggested resolution</p>
+                  <p className="mt-1 text-sm leading-6">{item.resolution}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
         <section id="decompose" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Feature Decomposition</h2>
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
@@ -477,6 +686,119 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           </div>
         </section>
 
+        <section id="trace" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product → Engineering Traceability</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{TRACE_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {plan.traceability.ascii}
+          </pre>
+          <label className="mt-6 block">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Why this work</span>
+            <input
+              value={whyQuery}
+              onChange={(event) => setWhyQuery(event.target.value)}
+              placeholder="Why are we implementing this API?"
+              className="mt-2 w-full rounded-2xl border border-rule bg-white px-4 py-3 text-sm"
+            />
+          </label>
+          <div className="mt-4 space-y-4">
+            {whyChains.map((chain) => (
+              <article key={chain.featureId} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <h3 className="font-medium">{chain.feature}</h3>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Goal to test</p>
+                <ol className="mt-2 space-y-2">
+                  {chain.down.map((step) => (
+                    <li key={`${chain.featureId}-${step.kind}-${step.label}`}>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{KIND_LABEL[step.kind]}</p>
+                      <p className="text-sm leading-6">{step.label}</p>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Why this API</p>
+                <ol className="mt-2 space-y-2">
+                  {chain.why.map((step) => (
+                    <li key={`${chain.featureId}-why-${step.kind}-${step.label}`}>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{KIND_LABEL[step.kind]}</p>
+                      <p className="text-sm leading-6">{step.label}</p>
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="impact" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Change Impact Analysis</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{IMPACT_NOTE}</p>
+          {plan.impacts.length === 0 ? (
+            <p className="mt-4 rounded-2xl border border-rule bg-white/70 p-4 text-sm leading-6">
+              No requirement change against a prior surface.
+            </p>
+          ) : (
+            plan.impacts.map((item) => (
+              <article key={item.change} className="mt-4 rounded-2xl border border-stamp/30 bg-stamp/5 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Pill tone="stamp">Requirement change</Pill>
+                  <Pill tone={impactTone(item.severity)}>{`${item.severity} impact`}</Pill>
+                </div>
+                <p className="mt-3 font-serif text-xl text-navy">{item.change}</p>
+                <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+                  {item.ascii}
+                </pre>
+                {(
+                  [
+                    ["Affected features", item.features],
+                    ["Affected APIs", item.apis],
+                    ["Database changes", item.database],
+                    ["Mobile screens", item.screens],
+                    ["Permissions", item.permissions],
+                    ["Tests", item.tests],
+                    ["Documentation", item.documentation],
+                    ["Security implications", item.security],
+                  ] as const
+                ).map(([title, lines]) => (
+                  <div key={title} className="mt-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{title}</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                      {lines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </article>
+            ))
+          )}
+        </section>
+
+        <section id="risk" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product Risk Analysis</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{RISK_NOTE}</p>
+          <div className="mt-4 space-y-6">
+            {plan.riskAnalysis.registers.map((register) => (
+              <article key={register.featureId}>
+                <h3 className="font-serif text-xl text-navy">{register.feature}</h3>
+                <ol className="mt-3 space-y-3">
+                  {register.risks.map((item) => (
+                    <li key={`${register.featureId}-${item.kind}`} className="rounded-2xl border border-rule bg-white/70 p-4">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{RISK_LABEL[item.kind]}</p>
+                      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risk</p>
+                      <p className="mt-1 font-serif text-xl text-navy">{item.risk}</p>
+                      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Cause</p>
+                      <p className="mt-1 text-sm leading-6">{item.cause}</p>
+                      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Mitigation</p>
+                      <p className="mt-1 text-sm leading-6">{item.mitigation}</p>
+                      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Residual uncertainty</p>
+                      <p className="mt-1 text-sm leading-6">{item.residual}</p>
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section id="priority" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Prioritization Engine</h2>
           <p className="mt-3 text-sm leading-6 text-ink-soft">{SCORE_NOTE}</p>
@@ -511,6 +833,146 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section id="recommend" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Evidence-Based Recommendations</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{CONFIDENCE_NOTE}</p>
+          <ol className="mt-4 space-y-4">
+            {plan.recommendations.map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">Opportunity: {item.opportunity}</h3>
+                  <p className="font-serif text-2xl text-navy">{item.confidence.toFixed(2)}</p>
+                </div>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                  {item.evidence.map((line) => (
+                    <li key={line.text}>
+                      {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
+                    </li>
+                  ))}
+                </ul>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">User impact</dt>
+                    <dd className="mt-1 text-sm leading-6">
+                      <Pill tone={impactTone(item.userImpact.level)}>{item.userImpact.level}</Pill> {item.userImpact.reason}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Business impact</dt>
+                    <dd className="mt-1 text-sm leading-6">
+                      <Pill tone={impactTone(item.businessImpact.level)}>{item.businessImpact.level}</Pill> {item.businessImpact.reason}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Technical cost</dt>
+                    <dd className="mt-1 text-sm leading-6">
+                      <Pill tone={impactTone(item.technicalCost.level)}>{item.technicalCost.level}</Pill> {item.technicalCost.reason}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Confidence</dt>
+                    <dd className="mt-1 text-sm leading-6">{item.confidence.toFixed(2)}</dd>
+                  </div>
+                </dl>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risks</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                  {item.risks.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Unknowns</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                  {item.unknowns.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="experiment" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Experiment Planning</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{EXPERIMENT_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {EXPERIMENT_ASCII}
+          </pre>
+          <ol className="mt-4 space-y-4">
+            {(plan.experiments ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{item.idea}</h3>
+                  <Pill tone="copper">{item.evidence}</Pill>
+                </div>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Hypothesis</p>
+                <p className="mt-1 font-serif text-xl text-navy">{item.hypothesis}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Experiment</p>
+                <p className="mt-1 text-sm leading-6">{item.experiment}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Primary metric</p>
+                <p className="mt-1 text-sm leading-6">{item.metric}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Success threshold</p>
+                <p className="mt-1 text-sm leading-6">{item.successCriteria}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision</p>
+                <p className="mt-1 text-sm leading-6">
+                  {item.decision === "pending" ? `Pending — ${EXPERIMENT_CHOICES.join(" / ")}.` : experimentVerdictLabel(item.decision)}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="analytics" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Product Analytics Feedback</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{ANALYTICS_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {plan.analytics?.ascii}
+          </pre>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {(["event", "error", "behavior"] as const).map((kind) => {
+              const lines = (plan.analytics?.signals ?? []).filter((item) => item.kind === kind);
+              return (
+                <article key={kind} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{ANALYTICS_KIND_LABEL[kind]}</p>
+                  {lines.length ? (
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6">
+                      {lines.map((item) => (
+                        <li key={item.id}>
+                          {item.detail} <Pill tone={item.declining ? "stamp" : "copper"}>{item.evidence}</Pill>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-3 text-sm leading-6 text-ink-soft">None named.</p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {plan.analytics?.loopAscii}
+          </pre>
+          {(plan.analytics?.loops ?? []).length ? (
+            <ol className="mt-4 space-y-4">
+              {plan.analytics.loops.map((loop) => (
+                <li key={loop.feature} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <h3 className="font-serif text-xl text-navy">{loop.feature}</h3>
+                  <ol className="mt-3 space-y-3">
+                    {loop.stages.map((item) => (
+                      <li key={item.id}>
+                        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{item.label}</p>
+                        <p className="mt-1 text-sm leading-6">{item.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-4 text-sm leading-6 text-ink-soft">No launched feature has a stated usage decline.</p>
+          )}
         </section>
 
         <section id="roadmap" className="mt-12 scroll-mt-6">
@@ -556,6 +1018,63 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               </ul>
             </div>
           )}
+        </section>
+
+        <section id="approval" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Human Approval Gates</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{APPROVAL_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {APPROVAL_ASCII}
+          </pre>
+          <ol className="mt-4 space-y-4">
+            {(live.approvals?.gates ?? []).map((item) => (
+              <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{APPROVAL_LABEL[item.kind]}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <Pill tone={item.authorization === "mandatory" ? "stamp" : "copper"}>
+                      {AUTHORIZATION_LABEL[item.authorization]}
+                    </Pill>
+                    <Pill tone={item.status === "approved" ? "sage" : item.status === "rejected" ? "stamp" : "navy"}>
+                      {item.status}
+                    </Pill>
+                  </div>
+                </div>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">AI proposes</p>
+                <p className="mt-1 font-serif text-xl text-navy">{item.proposal}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence collected</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
+                  {item.evidence.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Risk assessment</p>
+                <p className="mt-1 text-sm leading-6">{item.risk}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Human approval</p>
+                <p className="mt-1 text-sm leading-6">{item.status === "pending" ? "Waiting for a person to sign." : item.status}</p>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Commit decision</p>
+                <p className="mt-1 text-sm leading-6">{item.commit}</p>
+                {item.status === "pending" && (
+                  <div className="no-print mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-navy px-4 py-2 text-sm text-paper"
+                      onClick={() => decide(item.id, "approved")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-rule bg-white px-4 py-2 text-sm"
+                      onClick={() => decide(item.id, "rejected")}
+                    >
+                      Send back
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section id="handoff" className="mt-12 scroll-mt-6">

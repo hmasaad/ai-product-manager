@@ -1,7 +1,8 @@
 import { runProductManager } from "@/lib/agent";
+import { mergeMemory, rememberPlan } from "@/lib/memory";
 import { friendlyModelError } from "@/lib/model-errors";
-import { saveLatest } from "@/lib/store";
-import type { ProductPlan } from "@/lib/types";
+import { loadMemory, saveLatest, saveMemory } from "@/lib/store";
+import type { ProductMemory, ProductPlan } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -15,16 +16,19 @@ export async function POST(request: Request) {
   let brief = "";
   let existing = "";
   let constraints = "";
+  let memory: ProductMemory | undefined;
 
   try {
     const body = (await request.json()) as {
       brief?: string;
       existing?: string;
       constraints?: string;
+      memory?: ProductMemory;
     };
     brief = body.brief ?? "";
     existing = body.existing ?? "";
     constraints = body.constraints ?? "";
+    memory = body.memory;
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -40,10 +44,12 @@ export async function POST(request: Request) {
       };
       try {
         let plan: ProductPlan | null = null;
+        const remembered = mergeMemory(await loadMemory(), memory ?? { product: "", updatedAt: "", items: [] });
         await runProductManager({
           brief,
           existing,
           constraints,
+          memory: remembered,
           onEvent: (event) => {
             if (event.type === "step") send("step", event.step);
             if (event.type === "usage") send("usage", event.usage);
@@ -54,7 +60,10 @@ export async function POST(request: Request) {
             if (event.type === "error") send("error", { message: event.message });
           },
         });
-        if (plan) await saveLatest(plan);
+        if (plan) {
+          await saveLatest(plan);
+          await saveMemory(rememberPlan(remembered, plan));
+        }
         send("done", { ok: Boolean(plan) });
       } catch (error) {
         send("error", { message: friendlyModelError(error) });

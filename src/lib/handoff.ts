@@ -1,5 +1,16 @@
+import { ambiguityMarkdown } from "./ambiguity";
+import { decisionsMarkdown } from "./assumption";
+import { conflictMarkdown } from "./conflict";
 import { decompositionMarkdown } from "./decompose";
 import { prdMarkdown } from "./prd";
+import { recommendationMarkdown } from "./recommend";
+import { impactMarkdown } from "./impact";
+import { analyticsMarkdown } from "./analytics";
+import { approvalMarkdown, pendingMandatory } from "./approval";
+import { orchestrationMarkdown } from "./orchestrate";
+import { experimentMarkdown } from "./experiment";
+import { riskAnalysisMarkdown } from "./risks";
+import { traceabilityMarkdown } from "./trace";
 import type { Feature, Milestone, ProductPlan, Story } from "./types";
 
 function bullets(lines: string[]) {
@@ -96,6 +107,10 @@ ${bullets(later)}
 
 ${bullets(plan.constraints)}
 
+## Requirement conflicts
+
+${conflictMarkdown(plan)}
+
 ## Success
 
 ${bullets(plan.problem.success)}
@@ -114,9 +129,51 @@ ${bullets(plan.problem.openQuestions)}
 
 ${bullets(plan.assumptions)}
 
+## Decisions
+
+${decisionsMarkdown(plan)}
+
 ## Risks
 
 ${bullets(plan.risks)}
+
+## Product risk analysis
+
+${riskAnalysisMarkdown(plan)}
+
+## Change impact
+
+The architect treats this blast radius as in-scope design work.
+
+${impactMarkdown(plan)}
+
+## Experiment planning
+
+Treat later or unproven slices as a hypothesis until the experiment exits.
+
+${experimentMarkdown(plan)}
+
+## Product analytics
+
+Events, errors, and behavior after launch. A decline is an opportunity, not a new roadmap.
+
+${analyticsMarkdown(plan)}
+
+## Specialist agents
+
+The product manager orchestrated six specialists. Their outputs meet at a product decision.
+
+${orchestrationMarkdown(plan)}
+
+## Human approval
+
+${
+  pendingMandatory(plan).length
+    ? "Mandatory gates are pending. Do not treat the plan as a committed decision."
+    : "No mandatory gate is waiting."
+}
+
+${approvalMarkdown(plan)}
 `;
 }
 
@@ -145,6 +202,12 @@ ${plan.milestones.map((item) => milestoneBlock(plan, item)).join("\n\n")}
   return `# Developer brief — ${plan.title}
 
 Ship in milestone order. Each task traces to a requirement in the architect brief.
+
+## Change impact
+
+Screens, tests, and permissions that move with this requirement.
+
+${impactMarkdown(plan)}
 
 ${plan.milestones.map((item) => milestoneBlock(plan, item)).join("\n\n")}
 `;
@@ -180,6 +243,44 @@ export function planMarkdown(plan: ProductPlan) {
   return `# ${plan.title}
 
 Mode: ${plan.mode}. Maturity: ${plan.maturity}.${plan.proposed ? " Proposed MVP." : ""}
+
+## Product context
+
+${
+  plan.context && plan.context.recalled > 0
+    ? `Remembered ${plan.context.recalled} items${plan.context.product ? ` from ${plan.context.product}` : ""}.`
+    : "No product context was loaded."
+}
+${plan.context?.alreadyExists.map((hit) => `- Already recorded: ${hit.text}`).join("\n") || ""}
+${plan.context?.conflicts.map((hit) => `- Earlier decision stands: ${hit.text}`).join("\n") || ""}
+
+## Change impact
+
+${impactMarkdown(plan)}
+
+## Product risk analysis
+
+${riskAnalysisMarkdown(plan)}
+
+## Experiment planning
+
+${experimentMarkdown(plan)}
+
+## Product analytics
+
+${analyticsMarkdown(plan)}
+
+## Specialist agents
+
+${orchestrationMarkdown(plan)}
+
+## Human approval
+
+${approvalMarkdown(plan)}
+
+## Product to engineering
+
+${traceabilityMarkdown(plan)}
 
 ## Feature decomposition
 
@@ -227,6 +328,14 @@ ${tagged(discovery.successMetrics)}
 
 ${tagged(discovery.mvpDefinition)}
 
+## Ambiguities
+
+${ambiguityMarkdown(plan)}
+
+## Decisions
+
+${decisionsMarkdown(plan)}
+
 ## PRD
 
 ${prdMarkdown(plan)}
@@ -246,6 +355,14 @@ ${personas}
 ## Requirements
 
 ${requirements}
+
+## Requirement conflicts
+
+${conflictMarkdown(plan)}
+
+## Recommendations
+
+${recommendationMarkdown(plan)}
 
 ## Prioritization
 

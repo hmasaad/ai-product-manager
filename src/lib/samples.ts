@@ -61,6 +61,65 @@ export const ROADMAP_BRIEF = `20 proposed features
 3 developers
 8-week target`;
 
+export const TRANSACTION_BRIEF = `Users can edit submitted transactions.`;
+
+export const TRANSACTION_EXISTING = `Submitted transactions are immutable.`;
+
+export const TRANSACTION_ARCHITECTURE = `Posted entries live in an append-only ledger.`;
+
+export const DELETE_TX_BRIEF = `Users can delete transactions.`;
+
+export const EXPORT_REPORTS_BRIEF = `Users should be able to export reports.`;
+
+export const REPORT_EXPORT_BRIEF = `Improve report export.`;
+
+export const REPORT_TEMPLATES_BRIEF = `Saved report templates.
+
+Hypothesis:
+Users will complete report creation faster
+with saved report templates.
+
+Experiment:
+Prototype templates for 10 users.
+
+Primary metric:
+Time to create report.
+
+Success threshold:
+30% reduction.
+`;
+
+export const REPORT_EXPORT_EXISTING = `- 143 support requests
+- 27% of users encountered the issue
+- 3 related feature requests`;
+
+export const REPORT_USAGE_BRIEF = `Saved report templates launched. Usage is declining.`;
+
+export const REPORT_USAGE_EXISTING = `Product analytics — last 14 days vs prior 14 days
+
+Feature launched: Saved report templates
+
+Events:
+- report_created: 4,200 → 2,940 (−30%)
+- template_applied: 1,100 → 620 (−44%)
+
+Errors:
+- template_load_failed: 18 → 140
+
+User behavior:
+- Time to create report rose from 4.2 min to 6.1 min
+- Template picker abandoned on 41% of opens
+`;
+
+export const STRATEGY_BET_BRIEF = `Make saved report templates the 2026 product bet.
+
+This is a product strategy change.
+This changes scope: templates become a must-have.
+This changes priority: templates move ahead of new report types.
+This is a major roadmap decision: slip the Q4 export suite.
+This is a production-impacting change: the live report creator switches to templates.
+`;
+
 export const BILLING_BRIEF = `Reduce failed payment completion. Do not redesign the whole billing portal.`;
 
 export const BILLING_EXISTING = `Billing portal — last 30 days

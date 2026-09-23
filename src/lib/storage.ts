@@ -1,6 +1,8 @@
-import type { ProductPlan } from "./types";
+import { emptyMemory, mergeMemory } from "./memory";
+import type { ProductMemory, ProductPlan } from "./types";
 
 const KEY = "pm:latest";
+const MEMORY_KEY = "pm:memory";
 
 export function savePlan(plan: ProductPlan) {
   if (typeof window === "undefined") return;
@@ -30,6 +32,49 @@ export async function fetchLatest(): Promise<ProductPlan | null> {
   } catch {
     return local;
   }
+}
+
+export function loadMemoryLocal(): ProductMemory {
+  if (typeof window === "undefined") return emptyMemory();
+  const raw = window.localStorage.getItem(MEMORY_KEY);
+  if (!raw) return emptyMemory();
+  try {
+    const parsed = JSON.parse(raw) as ProductMemory;
+    return parsed?.items ? parsed : emptyMemory();
+  } catch {
+    return emptyMemory();
+  }
+}
+
+export function saveMemoryLocal(memory: ProductMemory) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
+}
+
+export async function fetchMemory(): Promise<ProductMemory> {
+  const local = loadMemoryLocal();
+  try {
+    const response = await fetch("/api/memory");
+    if (!response.ok) return local;
+    const payload = (await response.json()) as { memory?: ProductMemory };
+    const merged = mergeMemory(local, payload.memory ?? emptyMemory());
+    saveMemoryLocal(merged);
+    return merged;
+  } catch {
+    return local;
+  }
+}
+
+export async function saveMemoryRemote(body: { feedback?: string; metrics?: string; clear?: boolean }) {
+  const response = await fetch("/api/memory", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error("Could not update product context.");
+  const payload = (await response.json()) as { memory: ProductMemory };
+  saveMemoryLocal(payload.memory);
+  return payload.memory;
 }
 
 export async function fetchStatus() {

@@ -1,3 +1,4 @@
+import { decisionsMarkdown } from "./assumption";
 import type { Discovery, Prd, ProductPlan, TaggedLine } from "./types";
 
 function qualityRequirement(statement: string) {
@@ -156,6 +157,10 @@ ${section(
 ${section("Risks", prd.risks)}
 
 ${section("Open Questions", prd.openQuestions)}
+
+## Decisions
+
+${decisionsMarkdown(plan)}
 
 ${section("MVP Scope", prd.mvpScope)}
 

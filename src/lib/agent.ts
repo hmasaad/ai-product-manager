@@ -6,7 +6,8 @@ import { judgmentPrompt, JUDGMENT_SYSTEM } from "./prompts";
 import { planFromJudgment } from "./planner";
 import { PIPELINE } from "./roster";
 import { judgmentJsonSchema, judgmentSchema } from "./schemas";
-import type { AgentStepEvent, Judgment, ModelUsage, ProductInput, ProductPlan } from "./types";
+import { emptyMemory } from "./memory";
+import type { AgentStepEvent, Judgment, ModelUsage, ProductInput, ProductMemory, ProductPlan } from "./types";
 
 export type AgentEvent =
   | { type: "step"; step: AgentStepEvent }
@@ -33,6 +34,7 @@ export async function runProductManager(input: {
   brief: string;
   existing: string;
   constraints: string;
+  memory?: ProductMemory;
   onEvent: (event: AgentEvent) => void;
 }) {
   const productInput: ProductInput = {
@@ -83,14 +85,32 @@ export async function runProductManager(input: {
 
   send("problem");
   send("personas");
+  send("market");
+  send("ambiguity");
+  send("assumption");
   send("prd");
+  send("conflict");
   send("features");
   send("stories");
+  send("trace");
+  send("impact");
+  send("risk");
   send("priority");
+  send("recommend");
+  send("experiment");
+  send("analytics");
   send("roadmap");
+  send("approval");
   send("handoff");
 
-  const plan = planFromJudgment({ input: productInput, judgment, mode, note, usage });
+  const plan = planFromJudgment({
+    input: productInput,
+    judgment,
+    mode,
+    note,
+    usage,
+    memory: input.memory ?? emptyMemory(),
+  });
   input.onEvent({ type: "plan", plan });
   return plan;
 }

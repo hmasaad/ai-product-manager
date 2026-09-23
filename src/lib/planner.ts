@@ -4,8 +4,20 @@ import { buildDiscovery, enrichSketch } from "./discovery";
 import { buildJudgment, composeSource } from "./grounded";
 import { architectBrief, developerBrief } from "./handoff";
 import { buildPrd } from "./prd";
+import { applyAmbiguities, detectAmbiguities } from "./ambiguity";
+import { trackDecisions } from "./assumption";
+import { analyzeImpact } from "./impact";
+import { buildAnalytics, emptyAnalytics } from "./analytics";
+import { buildApprovals, emptyApprovals } from "./approval";
+import { buildOrchestration, emptyOrchestration } from "./orchestrate";
+import { buildExperiments } from "./experiment";
+import { buildRiskAnalysis, emptyRiskAnalysis } from "./risks";
+import { buildTraceability, emptyTraceability } from "./trace";
+import { detectConflicts } from "./conflict";
+import { consultMemory, emptyContext, emptyMemory } from "./memory";
+import { buildRecommendations } from "./recommend";
 import { buildCapacityPlan, isCapacityRoadmap, roadmapFromMilestones } from "./roadmap";
-import type { Judgment, ModelUsage, ProductInput, ProductPlan } from "./types";
+import type { Judgment, ModelUsage, ProductInput, ProductMemory, ProductPlan } from "./types";
 
 export function planFromJudgment(input: {
   input: ProductInput;
@@ -13,10 +25,13 @@ export function planFromJudgment(input: {
   mode: ProductPlan["mode"];
   note?: string;
   usage?: ModelUsage;
+  memory?: ProductMemory;
 }): ProductPlan {
   const sourceText = composeSource(input.input);
   const enriched = enrichSketch(input.input, input.judgment);
-  const judgment = enriched.judgment;
+  const consulted = consultMemory(enriched.judgment, input.memory ?? emptyMemory(), input.input.brief);
+  const ambiguities = detectAmbiguities(input.input, consulted.judgment);
+  const judgment = applyAmbiguities(consulted.judgment, ambiguities);
   const discovery = buildDiscovery({
     judgment,
     proposed: enriched.proposed,
@@ -54,6 +69,18 @@ export function planFromJudgment(input: {
       sprints: [],
       deferred: [],
     },
+    context: consulted.context ?? emptyContext(),
+    ambiguities,
+    decisions: [],
+    conflicts: [],
+    recommendations: [],
+    impacts: [],
+    riskAnalysis: emptyRiskAnalysis(),
+    experiments: [],
+    analytics: emptyAnalytics(),
+    approvals: emptyApprovals(),
+    orchestration: emptyOrchestration(),
+    traceability: emptyTraceability(),
     decomposition: { root: "", ascii: "", nodes: [] },
     discovery,
     prd: {
@@ -91,7 +118,27 @@ export function planFromJudgment(input: {
   const decomposed = buildDecomposition(plan);
   plan.stories = decomposed.stories;
   plan.decomposition = decomposed.decomposition;
+  plan.traceability = buildTraceability(plan);
+  plan.decisions = trackDecisions(plan);
+  for (const item of plan.decisions) {
+    if (item.status === "assumption" && !plan.assumptions.includes(item.decision)) {
+      plan.assumptions.push(item.decision);
+      plan.discovery.assumptions.push({ text: item.decision, evidence: "inferred" });
+    }
+  }
   plan.prd = buildPrd(plan);
+  plan.conflicts = detectConflicts({
+    input: input.input,
+    constraints: plan.constraints,
+    memory: input.memory,
+  });
+  plan.recommendations = buildRecommendations(plan, input.memory);
+  plan.impacts = analyzeImpact(plan, input.memory);
+  plan.riskAnalysis = buildRiskAnalysis(plan);
+  plan.experiments = buildExperiments(plan);
+  plan.analytics = buildAnalytics(plan, input.memory);
+  plan.approvals = buildApprovals(plan);
+  plan.orchestration = buildOrchestration(plan);
   plan.handoff = {
     architect: architectBrief(plan),
     developer: developerBrief(plan),
@@ -99,10 +146,11 @@ export function planFromJudgment(input: {
   return plan;
 }
 
-export function planFromInput(input: ProductInput): ProductPlan {
+export function planFromInput(input: ProductInput, memory?: ProductMemory): ProductPlan {
   return planFromJudgment({
     input,
     judgment: buildJudgment(input),
     mode: "grounded",
+    memory,
   });
 }

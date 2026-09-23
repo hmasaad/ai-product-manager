@@ -11,6 +11,7 @@ Rules:
 - If the source lists scope or real complaints, maturity is "solution". Every stated must-have survives. You may clarify wording. You may not drop one.
 - Open questions are gaps in the source, not generic filler.
 - Constraints and non-goals written in the source survive.
+- Product context is memory from earlier PRDs, feedback, and metrics. Do not propose a feature that context already records. Do not contradict a recorded decision.
 - Personas you were not given by name are inferred, and you say so.`;
 
 export function judgmentPrompt(source: string, draft: Judgment) {
