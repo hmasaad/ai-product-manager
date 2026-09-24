@@ -1,4 +1,5 @@
 import { parseDecisionNumbers, parseOriginalAssumptions } from "./reevaluate";
+import { VERSIONING_ASCII, askVersioning, buildVersioning, emptyDecisionVersioning } from "./versioning";
 import { contentWords } from "./text";
 import type {
   AssumptionHealth,
@@ -24,10 +25,7 @@ import type {
 export const LEDGER_NOTE =
   "Facts, assumptions, and decisions stay on separate layers. An observation is a measured fact. An assumption is the interpretation. A decision is the choice that sat on that assumption, with a labeled confidence. New evidence challenges the assumption. A recorded decision moves through states. A change writes a new version. The old version stays. Together the versions are the product decision history.";
 
-export const VERSION_ASCII = `                    DEC-N v1
-                         │
-                         ↓
-                    DEC-N v2`;
+export const VERSION_ASCII = VERSIONING_ASCII;
 
 export function decisionLabel(entry: Pick<LedgerEntry, "decisionId" | "number" | "version">) {
   const id = entry.decisionId || (entry.number > 0 ? `DEC-${entry.number}` : "DEC");
@@ -383,7 +381,7 @@ export function ledgerObject(entry: LedgerEntry) {
 }
 
 export function emptyDecisionLedger(): DecisionLedger {
-  return { note: LEDGER_NOTE, ascii: LEDGER_ASCII, versionAscii: VERSION_ASCII, entries: [], nextNumber: 1 };
+  return { note: LEDGER_NOTE, ascii: LEDGER_ASCII, versionAscii: VERSION_ASCII, versioning: emptyDecisionVersioning(), entries: [], nextNumber: 1 };
 }
 
 function bullets(block: string) {
@@ -501,7 +499,7 @@ export function parseVersionCards(source: string): LedgerEntry[] {
     const body = match[3] ?? "";
     const decision = inline(body, "Decision") || bullets(section(body, "Decision"))[0] || "";
     const reason =
-      bullets(section(body, "Reason")).join(" ") ||
+      bullets(section(body, "Reason")).join(" · ") ||
       inline(body, "Reason") ||
       section(body, "Reason").replace(/\s+/g, " ").trim();
     const question = inline(body, "Question") || section(body, "Question") || `Decision #${number}`;
@@ -848,6 +846,7 @@ export function buildDecisionLedger(plan: ProductPlan, memory?: ProductMemory): 
     note: LEDGER_NOTE,
     ascii: LEDGER_ASCII,
     versionAscii: VERSION_ASCII,
+    versioning: buildVersioning(entries),
     entries,
     nextNumber: entries.length ? Math.max(...entries.map((item) => item.number)) + 1 : seed,
   };
@@ -859,23 +858,25 @@ export function recordLedgerChoice(plan: ProductPlan, optionId: string, at: stri
   if (!option) return board;
   const letterKey = letter(plan.decisionEngine.options.indexOf(option));
   const decision = `${letterKey}. ${option.title}`;
+  const entries = board.entries.map((entry) =>
+    sameQuestion(entry.question, plan.decisionEngine.question)
+      ? {
+          ...entry,
+          decision,
+          reason: option.summary,
+          owner: entry.owner || "Human",
+          date: at.slice(0, 10),
+          status: "recorded" as const,
+          lifecycle: "active" as const,
+          kind: kindOf(entry.question, decision),
+          decisionId: entry.decisionId || `DEC-${entry.number}`,
+        }
+      : entry,
+  );
   return {
     ...board,
-    entries: board.entries.map((entry) =>
-      sameQuestion(entry.question, plan.decisionEngine.question)
-        ? {
-            ...entry,
-            decision,
-            reason: option.summary,
-            owner: entry.owner || "Human",
-            date: at.slice(0, 10),
-            status: "recorded" as const,
-            lifecycle: "active" as const,
-            kind: kindOf(entry.question, decision),
-            decisionId: entry.decisionId || `DEC-${entry.number}`,
-          }
-        : entry,
-    ),
+    entries,
+    versioning: buildVersioning(entries),
   };
 }
 
@@ -889,6 +890,9 @@ export function askLedger(input: { entries: LedgerEntry[]; query: string; corpus
   const query = input.query.trim();
   const entries = input.entries.map((item) => refresh(item, input.corpus ?? ""));
   if (!query) return { query, kind: "search", entries: [], answer: "Ask why a recorded choice was made, or which assumptions no longer hold." };
+  if (/current version|history of this decision|version history|all versions/i.test(query)) {
+    return askVersioning({ entries, query });
+  }
   const why = /why did we (choose|pick|select)|why this architecture|why .* architecture/i.test(query);
   const stale = /no longer valid|assumptions behind|which assumptions/i.test(query);
   if (why) {
@@ -933,7 +937,16 @@ export function askLedger(input: { entries: LedgerEntry[]; query: string; corpus
 export function ledgerMarkdown(plan: ProductPlan) {
   const board = plan.decisionLedger;
   if (!board?.entries.length) return "No significant product decisions are on the ledger yet.";
-  return board.entries
+  const versioning = board.versioning ?? buildVersioning(board.entries);
+  const families = (versioning.families ?? [])
+    .map((family) => {
+      const versions = family.versions
+        .map((item) => `- ${item.id} [${item.status}]: ${item.decision || "The new choice is still unnamed."}`)
+        .join("\n");
+      return `${family.decisionId} current: ${family.currentId}\n\n${versions}`;
+    })
+    .join("\n\n");
+  const cards = board.entries
     .map((item) => {
       const options = item.options.map((option) => `${option.key}. ${option.title}`).join("\n");
       const evidence = item.evidence.map((line) => `- ${line.text} (${line.evidence})`).join("\n") || "- None named.";
@@ -985,4 +998,15 @@ Date:
 ${item.date || "Unrecorded"}`;
     })
     .join("\n\n");
+  return `${versioning.note}
+
+${versioning.question}
+
+\`\`\`
+${versioning.ascii}
+\`\`\`
+
+${families}
+
+${cards}`;
 }

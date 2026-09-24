@@ -1,16 +1,19 @@
 import { clip, contentWords } from "./text";
 import type {
+  DecisionLineage,
   Evidence,
   GraphAnswer,
   GraphEdge,
   GraphNode,
   GraphNodeKind,
+  LineageLayer,
+  LineageStep,
   ProductGraph,
   ProductPlan,
 } from "./types";
 
 export const GRAPH_NOTE =
-  "The product is a graph: customer, problem, opportunity, feature, requirement, then the decision, risk, experiment, and metric that hang off it, and the outcome they aim for. Questions walk those links instead of restating the PRD.";
+  "The product is a graph: customer, problem, opportunity, feature, requirement, then the decision, risk, experiment, and metric that hang off it, and the outcome they aim for. Decision lineage walks customer feedback to evidence, assumption, decision, feature, engineering, and product outcome, then back to new evidence. Questions walk those links instead of restating the PRD.";
 
 export const GRAPH_ASCII = `Customer
    │
@@ -41,6 +44,32 @@ export const GRAPH_BIGGEST = "Which features are solving the biggest customer pr
 export const GRAPH_WEAK = "Which roadmap items have weak evidence?";
 export const GRAPH_ASSUMPTIONS = "Which requirements depend on unvalidated assumptions?";
 export const GRAPH_FEEDBACK = "Which decisions are affected by this new customer feedback?";
+export const GRAPH_CAUSED = "What caused this feature to exist?";
+
+export const LINEAGE_ASCII = `Customer Feedback
+       │
+       ↓
+   Evidence
+       │
+       ↓
+   Assumption
+       │
+       ↓
+   Decision
+       │
+       ↓
+    Feature
+       │
+       ↓
+   Engineering
+       │
+       ↓
+    Product
+    Outcome
+       │
+       └──────────→ New Evidence`;
+
+export const LINEAGE_LAYERS: LineageLayer[] = ["feedback", "evidence", "assumption", "decision", "feature", "engineering", "outcome"];
 
 const BRANCH: GraphNodeKind[] = ["decision", "risk", "experiment", "metric"];
 
@@ -54,7 +83,7 @@ function linked(left: string, right: string, min = 2) {
 }
 
 export function emptyProductGraph(): ProductGraph {
-  return { note: GRAPH_NOTE, ascii: GRAPH_ASCII, nodes: [], edges: [] };
+  return { note: GRAPH_NOTE, ascii: GRAPH_ASCII, lineageAscii: LINEAGE_ASCII, nodes: [], edges: [], lineages: [] };
 }
 
 function node(id: string, kind: GraphNodeKind, label: string, evidence: Evidence, ref?: string): GraphNode {
@@ -70,6 +99,41 @@ function addEdge(edges: GraphEdge[], from: string, to: string, ids: Set<string>)
   if (!ids.has(from) || !ids.has(to)) return;
   if (edges.some((item) => item.from === from && item.to === to)) return;
   edges.push({ from, to });
+}
+
+function labeled(source: string, name: string) {
+  const inline = new RegExp(`(?:^|\\n)\\s*${name}\\s*:\\s*([^\\n]+)`, "i").exec(source);
+  if (inline?.[1]?.trim()) return inline[1].trim();
+  const block = new RegExp(
+    `(?:^|\\n)\\s*${name}\\s*:\\s*\\n([\\s\\S]*?)(?=\\n\\s*(?:Customer feedback|Evidence|Assumption|Decision|Feature|Engineering|Product outcome|New evidence)\\s*:|$)`,
+    "i",
+  ).exec(`\n${source}\n`);
+  return block?.[1]
+    ?.split("\n")
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter((line) => line.length > 1)
+    .join(" ")
+    .trim() ?? "";
+}
+
+function parseStatedLineage(source: string) {
+  if (!/Customer feedback:|Product outcome:|Engineering:/i.test(source)) return null;
+  const feedback = labeled(source, "Customer feedback");
+  const evidence = labeled(source, "Evidence");
+  const assumption = labeled(source, "Assumption");
+  const decision = labeled(source, "Decision");
+  const feature = labeled(source, "Feature");
+  const engineering = labeled(source, "Engineering");
+  const outcome = labeled(source, "Product outcome");
+  const newEvidence = labeled(source, "New evidence");
+  if (!feedback && !feature && !decision) return null;
+  return { feedback, evidence, assumption, decision, feature, engineering, outcome, newEvidence };
+}
+
+function causedBy(steps: LineageStep[]) {
+  const named = steps.filter((item) => item.label);
+  if (!named.length) return "No lineage is stored for this feature yet.";
+  return named.map((item) => `${item.layer}: ${item.label}`).join(" → ");
 }
 
 function bestId(nodes: GraphNode[], blob: string, kinds: GraphNodeKind[], min = 1) {
@@ -230,7 +294,107 @@ export function buildProductGraph(plan: ProductPlan): ProductGraph {
     else if (featureId) addEdge(edges, featureId, decision.id, ids);
   }
 
-  return { note: GRAPH_NOTE, ascii: GRAPH_ASCII, nodes, edges };
+  const lineages = attachLineage(plan, nodes, edges);
+  ids.clear();
+  for (const item of nodes) ids.add(item.id);
+
+  return { note: GRAPH_NOTE, ascii: GRAPH_ASCII, lineageAscii: LINEAGE_ASCII, nodes, edges, lineages };
+}
+
+function pickEngineering(plan: ProductPlan, featureId: string, blob: string) {
+  const story = plan.stories.find((item) => item.featureId === featureId);
+  const fromStory = story?.tasks.find((item) => item.lane === "backend" || item.lane === "qa") ?? story?.tasks[0];
+  if (fromStory?.title) return fromStory.title;
+  const node = plan.decomposition?.nodes.find((item) => item.featureId === featureId);
+  const fromNode = node?.tasks.find((item) => item.lane === "backend" || item.lane === "qa") ?? node?.tasks[0];
+  if (fromNode?.title) return fromNode.title;
+  const requirement = plan.requirements.find((item) => featureId && plan.features.find((row) => row.id === featureId)?.requirementIds.includes(item.id));
+  return requirement?.statement || blob;
+}
+
+function attachLineage(plan: ProductPlan, nodes: GraphNode[], edges: GraphEdge[]): DecisionLineage[] {
+  const ids = () => new Set(nodes.map((item) => item.id));
+  const stated = parseStatedLineage(plan.sourceText);
+  const lineages: DecisionLineage[] = [];
+
+  const addStep = (steps: LineageStep[], layer: LineageLayer, id: string, label: string, evidence: Evidence) => {
+    if (!label) return;
+    addNode(nodes, node(id, layer === "outcome" ? "outcome" : layer, label, evidence));
+    steps.push({ layer, label, evidence, nodeId: id });
+  };
+
+  if (stated && (stated.feature || stated.decision)) {
+    const steps: LineageStep[] = [];
+    addStep(steps, "feedback", "FBK-stated", stated.feedback, "stated");
+    addStep(steps, "evidence", "EVD-stated", stated.evidence, "stated");
+    addStep(steps, "assumption", "ASM-stated", stated.assumption, "stated");
+    const statedFeature = plan.features.find((item) => Boolean(stated.feature) && linked(item.name, stated.feature, 1));
+    addStep(steps, "decision", "DEC-stated", stated.decision, "stated");
+    addStep(steps, "feature", statedFeature ? `FEA-${statedFeature.id}` : "FEA-stated", stated.feature, "stated");
+    addStep(steps, "engineering", "ENG-stated", stated.engineering, "stated");
+    addStep(steps, "outcome", "OUT-stated", stated.outcome, "stated");
+    if (stated.newEvidence) addStep(steps, "evidence", "EVD-new", stated.newEvidence, "stated");
+    const liveIds = ids();
+    for (let index = 0; index < steps.length - 1; index += 1) {
+      addEdge(edges, steps[index].nodeId ?? "", steps[index + 1].nodeId ?? "", liveIds);
+    }
+    if (stated.newEvidence && steps[0]?.nodeId) {
+      addEdge(edges, steps[steps.length - 1].nodeId ?? "", steps.find((item) => item.layer === "evidence")?.nodeId ?? "", liveIds);
+    }
+    lineages.push({
+      id: "LIN-stated",
+      feature: stated.feature || stated.decision,
+      featureId: statedFeature?.id,
+      steps: steps.filter((item) => item.nodeId !== "EVD-new" || item.layer === "evidence"),
+      causedBy: causedBy(steps.filter((item) => item.nodeId !== "EVD-new")),
+    });
+    return lineages;
+  }
+
+  for (const feature of plan.features) {
+    if (lineages.some((item) => item.featureId === feature.id)) continue;
+    const blob = `${feature.name} ${feature.outcome}`;
+    const feedback =
+      plan.discovery.userProblems.find((item) => linked(item.text, blob, 1))?.text ||
+      plan.problem.statement;
+    const entry = [...(plan.decisionLedger?.entries ?? [])]
+      .sort((a, b) => (b.version ?? 1) - (a.version ?? 1))
+      .find((item) => linked(`${item.question} ${item.decision} ${item.assumptions.map((row) => row.statement || row.text).join(" ")}`, blob, 1));
+    const evidenceText =
+      entry?.observations[0]?.statement ||
+      entry?.observations[0]?.text ||
+      entry?.evidence[0]?.text ||
+      "";
+    const assumptionText = entry?.assumptions[0]?.statement || entry?.assumptions[0]?.text || "";
+    const decisionText = entry ? `${entry.decisionId || `DEC-${entry.number}`}${entry.version ? ` v${entry.version}` : ""} ${entry.decision}`.trim() : "";
+    const engineering = pickEngineering(plan, feature.id, blob);
+    const review = (plan.decisionReevaluation?.cases ?? []).find(
+      (item) => entry && item.decisionNumber === entry.number,
+    );
+    const steps: LineageStep[] = [];
+    addStep(steps, "feedback", `FBK-${feature.id}`, feedback, plan.discovery.userProblems[0]?.evidence ?? "inferred");
+    addStep(steps, "evidence", `EVD-${feature.id}`, evidenceText, evidenceText ? "stated" : "unknown");
+    addStep(steps, "assumption", `ASM-${feature.id}`, assumptionText, assumptionText ? "stated" : "unknown");
+    addStep(steps, "decision", entry ? `DEC-${entry.number}` : `DEC-${feature.id}`, decisionText || entry?.question || "", entry?.status === "recorded" ? "stated" : "inferred");
+    addStep(steps, "feature", `FEA-${feature.id}`, feature.name, feature.scope === "must" ? "stated" : "inferred");
+    addStep(steps, "engineering", `ENG-${feature.id}`, engineering, engineering ? "inferred" : "unknown");
+    addStep(steps, "outcome", `OUT-${feature.id}`, feature.outcome, "inferred");
+    if (review?.evidence.text) addStep(steps, "evidence", `EVD-new-${feature.id}`, review.evidence.text, review.evidence.evidence);
+    const liveIds = ids();
+    const chain = steps.filter((item) => item.label);
+    for (let index = 0; index < chain.length - 1; index += 1) {
+      addEdge(edges, chain[index].nodeId ?? "", chain[index + 1].nodeId ?? "", liveIds);
+    }
+    lineages.push({
+      id: `LIN-${feature.id}`,
+      feature: feature.name,
+      featureId: feature.id,
+      steps: chain.filter((item) => !item.nodeId?.startsWith("EVD-new") || item.layer === "evidence"),
+      causedBy: causedBy(chain.filter((item) => !item.nodeId?.startsWith("EVD-new"))),
+    });
+  }
+
+  return lineages;
 }
 
 function neighbors(graph: ProductGraph, id: string, direction: "out" | "in" | "both" = "both") {
@@ -392,14 +556,36 @@ function feedback(plan: ProductPlan, graph: ProductGraph, corpus: string): Graph
   return { query: GRAPH_FEEDBACK, kind: "feedback", nodes, answer };
 }
 
+function caused(plan: ProductPlan, graph: ProductGraph, query: string): GraphAnswer {
+  const words = contentWords(query.replace(/what caused|this feature to exist|why does|to exist|feature/gi, ""));
+  const lineages = graph.lineages ?? [];
+  const hit =
+    lineages.find((item) => words.some((word) => item.feature.toLowerCase().includes(word))) ||
+    lineages.find((item) => item.id === "LIN-stated") ||
+    lineages[0];
+  if (!hit) {
+    return { query: GRAPH_CAUSED, kind: "caused", nodes: [], answer: "No feature has a stored lineage yet." };
+  }
+  const nodes = hit.steps
+    .map((step) => graph.nodes.find((item) => item.id === step.nodeId))
+    .filter((item): item is GraphNode => Boolean(item));
+  return {
+    query,
+    kind: "caused",
+    nodes,
+    answer: `${hit.feature} exists because ${hit.causedBy.replace(/\.+$/, "")}.`,
+  };
+}
+
 export function askGraph(plan: ProductPlan, query: string, extra?: { corpus?: string }): GraphAnswer {
   const graph = plan.productGraph ?? emptyProductGraph();
   const text = query.trim();
-  if (!text) return { query, kind: "search", nodes: [], answer: "Ask which features sit on the biggest problems, which roadmap items are weakly evidenced, which requirements hang on assumptions, or which decisions a new note moves." };
+  if (!text) return { query, kind: "search", nodes: [], answer: "Ask which features sit on the biggest problems, which roadmap items are weakly evidenced, which requirements hang on assumptions, which decisions a new note moves, or what caused a feature to exist." };
   if (/biggest customer problems|features are solving/i.test(text)) return biggest(plan, graph);
   if (/weak evidence|roadmap items have weak/i.test(text)) return weak(plan, graph);
   if (/unvalidated assumptions|depend on unvalidated/i.test(text)) return assumptions(plan, graph);
   if (/affected by this new customer feedback|new customer feedback/i.test(text)) return feedback(plan, graph, extra?.corpus ?? "");
+  if (/caused this feature|feature to exist|why does this feature/i.test(text)) return caused(plan, graph, text);
   const words = contentWords(text);
   const nodes = graph.nodes.filter((item) => words.some((word) => item.label.toLowerCase().includes(word)));
   return {
@@ -415,6 +601,8 @@ export function graphMarkdown(plan: ProductPlan) {
   if (!graph?.nodes.length) return "The product knowledge graph is empty.";
   const lines = graph.nodes.map((item) => `- ${item.kind}: ${item.label} (${item.evidence})`);
   return `${GRAPH_ASCII}
+
+${graph.lineageAscii ?? LINEAGE_ASCII}
 
 ${lines.join("\n")}`;
 }

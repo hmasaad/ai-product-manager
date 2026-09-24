@@ -4,7 +4,7 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
   {
     id: "research",
     label: "Product Discovery",
-    detail: "Users, problems, goals, assumptions, constraints, competitors, metrics, and an MVP.",
+    detail: "Users, problems, goals, assumptions, constraints, competitors, metrics, an MVP, and the approach to suggest to the client.",
   },
   {
     id: "problem",
@@ -109,17 +109,17 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
   {
     id: "ledger",
     label: "Decision Ledger",
-    detail: "Observations, assumptions, and decisions stay on separate layers. Versions keep the full decision history.",
+    detail: "Observations, assumptions, and decisions stay on separate layers. Decision Versioning keeps DEC-N v1 and DEC-N v2 as a family. The current version is marked. The old version stays.",
   },
   {
     id: "reevaluate",
     label: "Decision Re-evaluation",
-    detail: "A fired trigger writes a proposal card and moves the decision through states. A change writes a new version. The old version stays.",
+    detail: "What Changed? is the central card: stated before and after, the affected assumption, and the proposed action. A person still reviews. A change writes a new version. The old version stays.",
   },
   {
     id: "graph",
     label: "Product Knowledge Graph",
-    detail: "Customer to outcome, with decisions, risks, experiments, and metrics on the requirement.",
+    detail: "Customer to outcome, plus the decision lineage from feedback to evidence, assumption, decision, feature, engineering, and product outcome.",
   },
   {
     id: "portfolio",
@@ -134,7 +134,7 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
   {
     id: "loop",
     label: "Autonomous Product Loop",
-    detail: "Observe through propose can run. Validate, decide, and execute wait on a person.",
+    detail: "Phase 3 runs product data through continuous monitoring, decision re-evaluation, a product opportunity, a new PRD, the architect, and engineering. A person still signs. Observe through propose can run. Validate, decide, and execute wait.",
   },
   {
     id: "handoff",

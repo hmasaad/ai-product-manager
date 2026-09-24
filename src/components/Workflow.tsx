@@ -1,7 +1,8 @@
 "use client";
 
 import { isStepCurrent } from "@/lib/client";
-import { ORCHESTRATE_ASCII, SPECIALIST_NAME, STEP_TO_AGENT } from "@/lib/orchestrate";
+import { CONNECTED_ASCII, ORCHESTRATE_ASCII, SPECIALIST_NAME, STEP_TO_AGENT } from "@/lib/orchestrate";
+import { PHASE3_ASCII, REEVAL_CYCLE_ASCII } from "@/lib/loop";
 import type { SpecialistId, StepId } from "@/lib/types";
 
 function Source({ title, detail }: { title: string; detail: string }) {
@@ -29,6 +30,15 @@ export function Workflow({ current, running }: { current: StepId | null; running
         <Source title="Existing product" detail="Docs or analytics" />
       </div>
       <pre className="mt-3 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-3 font-mono text-[11px] leading-5">
+        {PHASE3_ASCII}
+      </pre>
+      <pre className="mt-3 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-3 font-mono text-[11px] leading-5">
+        {CONNECTED_ASCII}
+      </pre>
+      <pre className="mt-3 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-3 font-mono text-[11px] leading-5">
+        {REEVAL_CYCLE_ASCII}
+      </pre>
+      <pre className="mt-3 overflow-x-auto rounded-2xl border border-rule bg-white/50 p-3 font-mono text-[11px] leading-5 text-ink-soft">
         {ORCHESTRATE_ASCII}
       </pre>
       <div className="mt-3 space-y-2">

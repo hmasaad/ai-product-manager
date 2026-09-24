@@ -1,3 +1,4 @@
+import { approachMarkdown } from "./approach";
 import { ambiguityMarkdown } from "./ambiguity";
 import { decisionsMarkdown } from "./assumption";
 import { conflictMarkdown } from "./conflict";
@@ -89,6 +90,10 @@ export function architectBrief(plan: ProductPlan) {
 ${proposal}
 ${plan.problem.statement}
 
+## Approach to suggest
+
+${approachMarkdown(plan)}
+
 ## Problem
 
 Who: ${plan.problem.who}
@@ -169,7 +174,7 @@ ${analyticsMarkdown(plan)}
 
 ## Specialist agents
 
-The product manager orchestrated six specialists. Their outputs meet at a product decision.
+The product manager orchestrated six specialists. Discovery and the Decision Engine share one path through the ledger, re-evaluation, architect, analytics, feedback, impact, and human approval.
 
 ${orchestrationMarkdown(plan)}
 
@@ -285,6 +290,10 @@ export function planMarkdown(plan: ProductPlan) {
   return `# ${plan.title}
 
 Mode: ${plan.mode}. Maturity: ${plan.maturity}.${plan.proposed ? " Proposed MVP." : ""}
+
+## Approach to suggest
+
+${approachMarkdown(plan)}
 
 ## Product context
 

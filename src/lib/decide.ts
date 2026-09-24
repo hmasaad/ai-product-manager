@@ -38,6 +38,17 @@ function fact(text: string, evidence: Evidence = "stated") {
   return { text, evidence };
 }
 
+function uniqueFacts(lines: { text: string; evidence: Evidence }[], skip: string[] = []) {
+  const banned = new Set(skip.map((text) => text.replace(/\s+/g, " ").trim().toLowerCase()).filter(Boolean));
+  const seen = new Set<string>();
+  return lines.filter((line) => {
+    const key = line.text.replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key || seen.has(key) || banned.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function option(input: {
   id: string;
   title: string;
@@ -73,8 +84,9 @@ function userContext(plan: ProductPlan, memory?: ProductMemory) {
       .slice(-3)
       .map((item) => fact(item.text, item.evidence)),
   ];
-  if (!lines.length) lines.push(fact("No named user evidence was loaded.", "unknown"));
-  return { kind: "user" as const, lines: lines.slice(0, 5) };
+  const unique = uniqueFacts(lines, [plan.input.brief]);
+  if (!unique.length) unique.push(fact("No named user evidence was loaded.", "unknown"));
+  return { kind: "user" as const, lines: unique.slice(0, 5) };
 }
 
 function businessContext(plan: ProductPlan, memory?: ProductMemory) {
@@ -88,8 +100,9 @@ function businessContext(plan: ProductPlan, memory?: ProductMemory) {
       .slice(-2)
       .map((item) => fact(item.text, item.evidence)),
   ];
-  if (!lines.length) lines.push(fact("No named business context was loaded.", "unknown"));
-  return { kind: "business" as const, lines: lines.slice(0, 6) };
+  const unique = uniqueFacts(lines, [plan.input.brief]);
+  if (!unique.length) unique.push(fact("No named business context was loaded.", "unknown"));
+  return { kind: "business" as const, lines: unique.slice(0, 6) };
 }
 
 function technicalContext(plan: ProductPlan, memory?: ProductMemory) {
@@ -102,8 +115,9 @@ function technicalContext(plan: ProductPlan, memory?: ProductMemory) {
       .slice(-2)
       .map((item) => fact(item.text, item.evidence)),
   ];
-  if (!lines.length) lines.push(fact("No named technical context was loaded.", "unknown"));
-  return { kind: "technical" as const, lines: lines.slice(0, 5) };
+  const unique = uniqueFacts(lines);
+  if (!unique.length) unique.push(fact("No named technical context was loaded.", "unknown"));
+  return { kind: "technical" as const, lines: unique.slice(0, 5) };
 }
 
 function holdOption(missing: string[]): DecisionOption {
@@ -190,7 +204,10 @@ function fromProblem(plan: ProductPlan): DecisionOption[] {
       id: "OPT-validate",
       title: "Sit with the named people and record what they do today",
       summary: "Treat this as a validation plan. No product bet yet.",
-      evidence: [fact(plan.problem.statement, "stated"), fact(plan.problem.who, "stated")],
+      evidence: [
+        fact("The source names a problem and no product.", "stated"),
+        fact(plan.problem.who ? `${plan.problem.who} are the people named in this situation.` : "The people affected were not named.", "inferred"),
+      ],
       tradeoffs: ["The team learns the workflow before a build.", "No software ships in this slice."],
       risks: [plan.riskAnalysis.registers[0]?.risks.find((item) => item.kind === "product")?.risk ?? "The team may freeze the wrong workflow."],
       missing: missing.length ? missing : ["Which number should move, and who owns the rush."],
@@ -334,7 +351,7 @@ function fromSolution(plan: ProductPlan): DecisionOption[] {
     option({
       id: "OPT-commit",
       title: `Commit the stated ${plan.proposed ? "proposed MVP" : "v1"}`,
-      summary: plan.problem.statement,
+      summary: plan.approach?.firstSlice || plan.title,
       evidence: plan.requirements
         .filter((item) => item.priority === "must")
         .slice(0, 3)

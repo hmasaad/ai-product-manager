@@ -23,6 +23,7 @@ import { buildRiskAnalysis, emptyRiskAnalysis } from "./risks";
 import { buildTraceability, emptyTraceability } from "./trace";
 import { detectConflicts } from "./conflict";
 import { consultMemory, emptyContext, emptyMemory } from "./memory";
+import { buildClientApproach, emptyClientApproach } from "./approach";
 import { buildRecommendations } from "./recommend";
 import { buildCapacityPlan, isCapacityRoadmap, roadmapFromMilestones } from "./roadmap";
 import type { Judgment, ModelUsage, ProductInput, ProductMemory, ProductPlan } from "./types";
@@ -55,6 +56,7 @@ export function planFromJudgment(input: {
     note: input.note ?? "",
     proposed: enriched.proposed,
     maturity: judgment.maturity,
+    approach: emptyClientApproach(),
     input: input.input,
     sourceText,
     research: judgment.research,
@@ -149,6 +151,7 @@ export function planFromJudgment(input: {
     memory: input.memory,
   });
   plan.recommendations = buildRecommendations(plan, input.memory);
+  plan.approach = buildClientApproach(plan);
   plan.opportunityScoring = buildOpportunityScoring(plan, input.memory);
   plan.impacts = analyzeImpact(plan, input.memory);
   plan.riskAnalysis = buildRiskAnalysis(plan);

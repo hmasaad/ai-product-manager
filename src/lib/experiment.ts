@@ -120,8 +120,8 @@ function validationExperiment(plan: ProductPlan): ProductExperiment {
   const who = plan.problem.who || usersOf(plan);
   return card({
     id: "EXP1",
-    idea: plan.problem.statement || plan.title,
-    hypothesis: `The people named still have this problem: ${plan.problem.statement}`,
+    idea: plan.title,
+    hypothesis: "The people named still have this problem during the situation in the source.",
     experiment: `Sit with ${who} and record what they do today, before a build.`,
     metric: UNNAMED_METRIC,
     successCriteria: UNNAMED_THRESHOLD,

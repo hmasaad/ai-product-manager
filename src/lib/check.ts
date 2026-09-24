@@ -6,15 +6,16 @@ import { LOOP_STAGES, REPORT_USAGE_COPY } from "./analytics";
 import { APPROVAL_KINDS, applyGateDecision, pendingMandatory } from "./approval";
 import { applyDecisionChoice, DECIDE_QUESTION } from "./decide";
 import { askLedger, ledgerObject, STALE_ASSUMPTIONS, WHY_ARCHITECTURE } from "./ledger";
-import { GRAPH_ASSUMPTIONS, GRAPH_BIGGEST, GRAPH_FEEDBACK, GRAPH_WEAK, askGraph } from "./graph";
+import { GRAPH_ASSUMPTIONS, GRAPH_BIGGEST, GRAPH_CAUSED, GRAPH_FEEDBACK, GRAPH_WEAK, LINEAGE_ASCII, LINEAGE_LAYERS, askGraph } from "./graph";
 import { OPPORTUNITY_NOTE } from "./score";
 import { PORTFOLIO_INTELLIGENCE_ASCII, PORTFOLIO_NOTE, PORTFOLIO_QUESTION, applyPortfolioChoice } from "./portfolio";
 import { EXPORT_CHANGE, EXPORT_INVESTIGATION, MONITOR_NOTE, MONITOR_WARNING } from "./monitor";
-import { LOOP_AUTONOMOUS_ASCII, LOOP_NOTE, LOOP_STAGE_IDS, applyLoopAdvance } from "./loop";
-import { DECISION_STATES, OFFLINE_AFFECTED, PIPELINE_STEPS, REEVAL_ASCII, REEVAL_OWNER, REEVAL_WARNING, TRIGGER_KINDS, applyReevaluationChoice, triggerFired } from "./reevaluate";
-import { SPECIALIST_IDS } from "./orchestrate";
+import { LOOP_AUTONOMOUS_ASCII, LOOP_NOTE, LOOP_STAGE_IDS, PHASE3_ASCII, PHASE3_IDS, REEVAL_CYCLE_ASCII, REEVAL_CYCLE_IDS, applyLoopAdvance } from "./loop";
+import { VERSION_CURRENT, VERSION_HISTORY, VERSIONING_ASCII, askVersioning } from "./versioning";
+import { CHANGED_ASCII, CHANGED_NOTE, CHANGED_STATUS, DECISION_STATES, OFFLINE_AFFECTED, PIPELINE_STEPS, PRIORITY_BANDS, REEVAL_ASCII, REEVAL_OWNER, REEVAL_WARNING, SCORE_ASCII, SCORE_EQUATION, TRIGGER_KINDS, applyReevaluationChoice, classifyPriority, triggerFired } from "./reevaluate";
+import { CONNECTED_ASCII, CONNECTED_HOP_IDS, SPECIALIST_IDS } from "./orchestrate";
 import { EXPERIMENT_CHOICES, REPORT_TEMPLATE_COPY, UNNAMED_METRIC, UNNAMED_THRESHOLD } from "./experiment";
-import { BILLING_BRIEF, BILLING_EXISTING, CLINIC_BRIEF, COLLAPSED_CLAIM_BRIEF, DELETE_TX_BRIEF, EXPORT_REPORTS_BRIEF, FACTS_LAYERS_BRIEF, FACTS_REEVAL_BRIEF, FARMER_BRIEF, FIELD_MANAGEMENT_BRIEF, HARBOR_BRIEF, HUMAN_OWNER_BRIEF, LEDGER_OBJECT_BRIEF, OFFLINE_REEVAL_BRIEF, OFFLINE_REPORTS_BRIEF, OFFLINE_STALE_EXISTING, PIPELINE_BRIEF, REPORT_EXPORT_BRIEF, REPORT_EXPORT_EXISTING, REPORT_SIGNAL_BRIEF, REPORT_SIGNAL_EXISTING, REPORT_TEMPLATES_BRIEF, REPORT_USAGE_BRIEF, REPORT_USAGE_EXISTING, ROADMAP_BRIEF, STATES_BRIEF, STRATEGY_BET_BRIEF, TRANSACTION_ARCHITECTURE, TRANSACTION_BRIEF, TRANSACTION_EXISTING, TRIGGERS_BRIEF, TRIGGERS_METRIC_BRIEF, TRIGGERS_TIME_BRIEF, VERSION_BRIEF } from "./samples";
+import { BILLING_BRIEF, BILLING_EXISTING, CHANGED_BRIEF, CLINIC_BRIEF, COLLAPSED_CLAIM_BRIEF, DELETE_TX_BRIEF, EXPORT_REPORTS_BRIEF, FACTS_LAYERS_BRIEF, FACTS_REEVAL_BRIEF, FARMER_BRIEF, FIELD_MANAGEMENT_BRIEF, HARBOR_BRIEF, HUMAN_OWNER_BRIEF, LEDGER_OBJECT_BRIEF, LINEAGE_BRIEF, OFFLINE_REEVAL_BRIEF, OFFLINE_REPORTS_BRIEF, OFFLINE_STALE_EXISTING, PIPELINE_BRIEF, REPORT_EXPORT_BRIEF, REPORT_EXPORT_EXISTING, REPORT_SIGNAL_BRIEF, REPORT_SIGNAL_EXISTING, REPORT_TEMPLATES_BRIEF, REPORT_USAGE_BRIEF, REPORT_USAGE_EXISTING, ROADMAP_BRIEF, SCORE_BRIEF, STATES_BRIEF, STRATEGY_BET_BRIEF, TRANSACTION_ARCHITECTURE, TRANSACTION_BRIEF, TRANSACTION_EXISTING, TRIGGERS_BRIEF, TRIGGERS_METRIC_BRIEF, TRIGGERS_TIME_BRIEF, VERSION_BRIEF } from "./samples";
 
 let failures = 0;
 
@@ -98,6 +99,16 @@ assert(!billing.recommendations.some((item) => /143/.test(JSON.stringify(item)))
 
 const farmer = planFromInput({ brief: FARMER_BRIEF, existing: "", constraints: "" });
 assert(farmer.proposed, "The farmer request is a proposed MVP");
+assert(farmer.approach.posture === "proposed-mvp", "A business idea stores a proposed-MVP approach");
+assert(/field activity log/i.test(farmer.approach.headline), "The farmer approach names the field activity log");
+assert(/name the fields|log a field activity|read one field/i.test(farmer.approach.firstSlice), "The farmer approach suggests name, log, and read as the first slice");
+assert(/buyer confirms|who logs|done means/i.test(farmer.approach.pitch), "The farmer pitch tells the client what to confirm");
+assert(farmer.approach.questions.some((line) => /who logs|activity types|no signal/i.test(line)), "The farmer approach keeps the client questions");
+assert(farmer.approach.later.some((line) => /satellite|advisor|compliance/i.test(line)), "The farmer approach holds platform work for later");
+assert(farmer.approach.alternatives.some((item) => /notebook/i.test(item.title + item.reason)), "The farmer approach names staying on the notebook");
+assert(farmer.approach.alternatives.some((item) => /FieldView|Granular/i.test(item.title)), "The farmer approach names copying an existing farm-record product");
+assert(!/market size|\bTAM\b/i.test(JSON.stringify(farmer.approach)), "The farmer approach invents no market size");
+assert(/approach to suggest|field activity/i.test(farmer.handoff.architect), "The architect brief receives the client approach");
 assert(/field activity log/i.test(farmer.title), "Farmer plan has a product title");
 assert(
   farmer.discovery.targetUsers.some((user) => /farm operator/i.test(user.role)),
@@ -135,8 +146,45 @@ assert(!/TAM|market size/i.test(JSON.stringify(farmer.discovery)), "Discovery in
 assert(!/FieldView|Granular|FarmLogs/i.test(JSON.stringify(harbor.discovery)), "HarborLine does not inherit farm competitors");
 assert(harbor.prd.mvpScope.length >= 8, "HarborLine PRD keeps the must-have MVP");
 assert(clinic.proposed === false, "Clinic stays a problem, not a proposed app");
+assert(clinic.approach.posture === "validate", "Clinic approach stays validation");
+assert(/phone|7 to 8|validate/i.test(clinic.approach.pitch), "Clinic approach keeps the phone rush");
+assert(/sit with|record what they do today/i.test(clinic.approach.firstSlice), "Clinic approach suggests sitting with the named people");
+assert(clinic.approach.alternatives.some((item) => /booking|invented/i.test(item.title + item.reason)), "Clinic approach refuses an invented booking product");
+assert(harbor.approach.posture === "stated-scope", "HarborLine approach stays the stated v1");
+assert(/offline/i.test(harbor.approach.pitch + harbor.approach.firstSlice), "HarborLine approach keeps offline capture");
+assert(harbor.approach.alternatives.some((item) => /cityworks/i.test(item.title + item.reason)), "HarborLine approach keeps CityWorks as the system of record");
+assert(billing.approach.posture === "repair", "Billing approach stays a repair of named failures");
+assert(/amount due|failed card|still shows due/i.test(billing.approach.pitch), "Billing approach suggests the named payment failures");
+
+const food = planFromInput({
+  brief: "I want to start a food delivery service for office workers in downtown.",
+  existing: "",
+  constraints: "",
+});
+assert(food.proposed && food.approach.posture === "proposed-mvp", "A food-delivery idea is a proposed MVP");
+assert(/food delivery/i.test(food.title), "A food-delivery idea gets a product title");
+assert(!/i want to start a food delivery service for office workers in downtown/i.test(food.approach.pitch), "The approach pitch does not paste the product input");
+assert(food.personas.every((persona) => !/i want to start a food delivery/i.test(`${persona.context} ${persona.pains.join(" ")}`)), "Persona copy is not the product input");
+assert(food.requirements.every((item) => !/i want to start a food delivery/i.test(item.statement)), "Requirements are not the product input");
+assert(
+  food.decisionEngine.contexts.every((ctx) => ctx.lines.every((line) => !/i want to start a food delivery/i.test(line.text))),
+  "Decision context is not the product input",
+);
+assert(/office worker/i.test(`${food.problem.who} ${food.personas.map((persona) => persona.role).join(" ")}`), "A food-delivery idea keeps the named users");
+assert(food.approach.firstSlice !== food.problem.statement && food.approach.firstSlice.length > 20, "First slice is not the problem statement");
+assert(food.research.filter((item) => /i want to start a food delivery/i.test(item.finding)).length <= 1, "The product input appears once as the request");
+
+const tutors = planFromInput({ brief: "Build a platform for tutors to schedule lessons and get paid.", existing: "", constraints: "" });
+assert(tutors.proposed, "A tutor platform is a proposed MVP");
+assert(!/app for tu\b|^a for tutors$/i.test(tutors.title), "Intent does not clip tutors to tu");
+assert(/schedule lessons for tutors/i.test(tutors.title), "A tutor platform is titled from the job");
+assert(/tutor/i.test(`${tutors.title} ${tutors.problem.who}`), "Tutors stay named");
+assert(/schedule lessons/i.test(`${tutors.approach.firstSlice} ${tutors.requirements.map((item) => item.statement).join(" ")}`), "The tutor job stays in the first slice");
+assert(tutors.personas[0]?.context !== tutors.personas[0]?.pains[0], "Persona context is not the same brief as the pain");
+assert(clinic.personas.every((persona) => persona.context !== clinic.problem.statement), "Clinic personas do not paste the brief as context");
 
 const fields = planFromInput({ brief: FIELD_MANAGEMENT_BRIEF, existing: "", constraints: "" });
+assert(fields.approach.posture === "proposed-mvp" && /create a field/i.test(fields.approach.firstSlice), "Field management approach keeps Create Field in the first slice");
 const fieldNames = [
   "Create Field",
   "Edit Field",
@@ -532,6 +580,11 @@ assert(!/market size|\bTAM\b/i.test(JSON.stringify(harbor.decisionEngine)), "Dec
 assert(billing.decisionEngine.options.some((item) => /amount due/i.test(item.title)), "Billing options include making the amount due visible");
 assert(billing.decisionEngine.options.some((item) => /do not redesign/i.test(item.title)), "Billing keeps do-not-redesign as an option");
 assert(billing.decisionEngine.options.some((item) => item.evidence.some((line) => /12,400|840|9%/.test(line.text))), "Billing options keep stated counts");
+for (const ctx of billing.decisionEngine.contexts) {
+  const texts = ctx.lines.map((line) => line.text);
+  assert(new Set(texts).size === texts.length, `Billing ${ctx.kind} context lists each line once`);
+}
+assert(billing.decisionEngine.contexts.some((ctx) => ctx.lines.some((line) => /12,400/.test(line.text))), "Billing context keeps the 12,400 invoice-page count");
 assert(deletion.decisionEngine.options.length >= 2, "Delete transactions has more than one option");
 assert(usage.decisionEngine.options.some((item) => /template load|reliability|picker/i.test(item.title)), "Report usage options include the load fix");
 assert(farmer.decisionEngine.options.length >= 2 && farmer.decisionEngine.record.status === "pending", "A proposed MVP still has a pending decision");
@@ -655,6 +708,65 @@ assert(pipelineCase?.comparison.change === 23, "The pipeline keeps +23 percentag
 assert(pipelineCase?.comparison.affectedAssumptionId === "A-01", "The pipeline names affected assumption A-01");
 assert(pipelineCase?.comparison.impact === "high", "The pipeline keeps High impact");
 assert(pipelineCase?.comparison.reevaluation === "required", "The pipeline marks re-evaluation required");
+assert(pipeline.decisionReevaluation.whatChangedAscii === CHANGED_ASCII, "Re-evaluation stores the What Changed? tree");
+assert(Boolean(pipelineCase?.whatChanged.deltas.some((row) => row.metric === "Offline usage" && row.before === "8%" && row.after === "31%")), "The pipeline What Changed? card keeps 8% → 31%");
+assert(!pipelineCase?.whatChanged.deltas.some((row) => /4\/month|27\/month|enterprise/i.test(`${row.metric} ${row.before} ${row.after}`)), "The pipeline card does not invent support or segment rows");
+const changed = planFromInput({ brief: CHANGED_BRIEF, existing: "", constraints: "" });
+const changedCase = changed.decisionReevaluation.cases.find((item) => item.decisionNumber === 142);
+assert(changed.decisionReevaluation.whatChangedNote === CHANGED_NOTE, "What Changed? stores the central-card note");
+assert(changedCase?.whatChanged.title === "Offline Reporting", "What Changed? names Offline Reporting");
+assert(changedCase?.whatChanged.deltas.map((row) => `${row.metric}|${row.before}|${row.after}`).join(";") === "Offline usage|8%|31%;Support requests|4/month|27/month;Customer segment|No enterprise requirement|Required", "What Changed? keeps the three stated deltas");
+assert(changedCase?.whatChanged.assumption?.id === "A-01", "What Changed? keeps A-01");
+assert(/connectivity is usually available/i.test(changedCase?.whatChanged.assumption?.statement ?? ""), "What Changed? keeps the connectivity assumption");
+assert(changedCase?.whatChanged.assumption?.status === CHANGED_STATUS, "What Changed? marks the assumption as no longer strongly supported");
+assert(/reconsider offline report generation/i.test(changedCase?.whatChanged.action ?? ""), "What Changed? proposes reconsidering offline report generation");
+assert(!/4\/month|27\/month|No enterprise requirement/.test(JSON.stringify(harbor.decisionReevaluation)), "HarborLine does not invent the What Changed? sample");
+assert(!clinic.decisionReevaluation.cases.some((item) => item.whatChanged?.deltas.some((row) => /4\/month|27\/month|enterprise/i.test(`${row.before} ${row.after}`))), "Clinic does not invent the What Changed? sample");
+assert(!farmer.decisionReevaluation.cases.some((item) => /4\/month|27\/month|enterprise/i.test(JSON.stringify(item.whatChanged))), "A proposed MVP does not invent the What Changed? sample");
+assert(!/4\/month|27\/month/.test(JSON.stringify(pipeline.decisionReevaluation.cases[0]?.whatChanged)), "The 8-to-31 pipeline does not invent 4/month");
+assert(changed.orchestration.connectedAscii === CONNECTED_ASCII, "What Changed? stores the connected-agent tree");
+assert(changed.orchestration.hops.map((item) => item.id).join("|") === CONNECTED_HOP_IDS.join("|"), "The connected path has every hop");
+assert(changed.orchestration.currentHop === "reevaluation", "What Changed? is currently on Re-evaluation");
+assert(Boolean(changed.orchestration.hops.find((item) => item.id === "reevaluation" && /8%/.test(item.finding) && /31%/.test(item.finding))), "Re-evaluation hop keeps 8% → 31%");
+assert(Boolean(changed.orchestration.hops.find((item) => item.id === "feedback" && /4\/month/.test(item.finding) && /27\/month/.test(item.finding))), "Feedback hop keeps 4/month → 27/month");
+assert(changed.productLoop.cycleAscii === REEVAL_CYCLE_ASCII, "The re-evaluation cycle stores observe → learn");
+assert(changed.productLoop.cycle.map((item) => item.id).join("|") === REEVAL_CYCLE_IDS.join("|"), "The re-evaluation cycle has every stage");
+assert(changed.productLoop.currentCycle === "reevaluate", "What Changed? is currently on RE-EVALUATE");
+assert(Boolean(changed.productLoop.cycle.find((item) => item.id === "detect" && /8%/.test(item.text) && /31%/.test(item.text))), "DETECT keeps 8% → 31%");
+assert(Boolean(changed.productLoop.cycle.find((item) => item.id === "propose" && /reconsider offline report generation/i.test(item.text))), "PROPOSE keeps reconsider offline report generation");
+assert(Boolean(changed.orchestration.agents.find((item) => item.id === "analytics")?.findings.some((line) => /Hands to Re-evaluation/i.test(line))), "Analytics hands to Re-evaluation");
+assert(Boolean(changed.orchestration.agents.find((item) => item.id === "research")?.findings.some((line) => /Hands to Opportunities/i.test(line))), "Research hands to Opportunities");
+assert(Boolean(changed.orchestration.agents.find((item) => item.id === "decision")?.findings.some((line) => /Hands to Decision Ledger/i.test(line))), "Product Decision hands to the ledger");
+assert(/Updated Decision|Re-evaluation/i.test(changed.handoff.architect), "The architect brief receives the connected path");
+const reviewedPath = applyReevaluationChoice(changed, changedCase?.id ?? "", "review");
+assert(changed.productLoop.phase3Ascii === PHASE3_ASCII, "What Changed? stores the Phase 3 autonomous loop");
+assert(changed.productLoop.phase3.map((item) => item.id).join("|") === PHASE3_IDS.join("|"), "Phase 3 has every autonomous hop");
+assert(changed.productLoop.currentPhase3 === "reevaluate", "Phase 3 is currently on Decision Re-evaluation");
+assert(Boolean(changed.productLoop.phase3.find((item) => item.id === "data" && /8%/.test(item.finding) && /31%/.test(item.finding))), "Product Data keeps 8% → 31%");
+assert(Boolean(changed.productLoop.phase3.find((item) => item.id === "monitor" && /8%|31%/.test(item.finding))), "Continuous Monitoring keeps the stated usage change");
+assert(Boolean(changed.productLoop.phase3.find((item) => item.id === "reevaluate" && /8%/.test(item.finding) && /31%/.test(item.finding))), "Decision Re-evaluation keeps 8% → 31%");
+assert(Boolean(changed.productLoop.phase3.find((item) => item.id === "opportunity" && /reconsider offline report generation/i.test(item.finding))), "Product Opportunity keeps reconsider offline report generation");
+assert(/Product Data|Engineering/i.test(changed.handoff.architect), "The architect brief receives the Phase 3 loop");
+assert(!harbor.productLoop.phase3.some((item) => /4\/month|27\/month|No enterprise requirement/.test(item.finding)), "HarborLine Phase 3 does not invent the What Changed? sample");
+assert(!/8% → 31%|8% -> 31%/.test(JSON.stringify(harbor.productLoop.phase3)), "HarborLine Phase 3 does not invent 8% → 31%");
+assert(clinic.productLoop.currentPhase3 === "data", "Clinic Phase 3 stays on Product Data");
+assert(clinic.productLoop.phase3.find((item) => item.id === "prd")?.finding === "Validation first. This is not a build.", "Clinic Phase 3 does not write a build PRD");
+assert(!/4\/month|27\/month|offline reporting/i.test(JSON.stringify(clinic.productLoop.phase3)), "Clinic Phase 3 does not invent the What Changed? sample");
+assert(farmer.productLoop.currentPhase3 === "opportunity" || farmer.productLoop.currentPhase3 === "data", "A proposed MVP stays on Product Data or Product Opportunity");
+assert(!/DEC-142|4\/month|31%/.test(JSON.stringify(farmer.productLoop.phase3)), "A proposed MVP does not inherit DEC-142 or the What Changed? sample");
+assert(reviewedPath.orchestration.currentHop === "approval", "Review Decision moves the path to Human Approval");
+assert(reviewedPath.productLoop.currentCycle === "approve", "Review Decision moves the cycle to APPROVE");
+assert(reviewedPath.productLoop.currentPhase3 === "reevaluate", "Review Decision leaves Phase 3 on Decision Re-evaluation");
+assert(pipeline.orchestration.currentHop === "reevaluation", "The 8-to-31 pipeline is on Re-evaluation");
+assert(!pipeline.orchestration.hops.some((item) => /4\/month|27\/month/.test(item.finding)), "The pipeline hops do not invent 4/month");
+assert(harbor.orchestration.connectedAscii === CONNECTED_ASCII && harbor.orchestration.hops.length === CONNECTED_HOP_IDS.length, "HarborLine stores the connected path");
+assert(!harbor.orchestration.hops.some((item) => /4\/month|27\/month|No enterprise requirement|0\.46/.test(item.finding)), "HarborLine hops do not invent the What Changed? sample");
+assert(!/8% → 31%|8% -> 31%/.test(JSON.stringify(harbor.orchestration.hops)), "HarborLine hops do not invent 8% → 31%");
+assert(clinic.orchestration.currentHop === "discovery", "Clinic stays on Product Discovery");
+assert(clinic.productLoop.currentCycle === "observe", "Clinic re-evaluation cycle stays on OBSERVE");
+assert(!/4\/month|27\/month|offline reporting/i.test(JSON.stringify(clinic.orchestration.hops) + JSON.stringify(clinic.productLoop.cycle)), "Clinic hops do not invent the What Changed? sample");
+assert(!/DEC-142|4\/month|31%/.test(JSON.stringify(farmer.orchestration.hops)), "A proposed MVP does not inherit DEC-142 or the What Changed? sample");
+assert(farmer.orchestration.currentHop === "opportunities" || farmer.orchestration.currentHop === "discovery", "A proposed MVP stays on discovery or opportunities");
 assert(pipelineCase?.pipeline.length === 9, "The fired trigger runs all nine stages");
 assert(pipeline.decisionReevaluation.owner === REEVAL_OWNER, "The pipeline leaves a person as the decision owner");
 assert(pipeline.decisionReevaluation.states.join("|") === DECISION_STATES.join("|"), "Re-evaluation stores the six decision states");
@@ -675,13 +787,31 @@ assert(/connectivity is usually present/i.test(ownerCase?.proposal.changedAssump
 assert(ownerCase?.proposal.impact === "high", "The owner card keeps High impact");
 assert(ownerCase?.proposal.proposedAction === "Reconsider offline support", "The owner card proposes reconsidering offline support");
 assert(ownerCase?.proposal.confidence === 0.86, "The owner card keeps confidence 0.86");
+assert(ownerCase?.score.priority == null, "The owner card leaves priority unnamed without business exposure");
+assert(ownerCase?.score.factors.find((item) => item.key === "businessExposure")?.score == null, "The owner card leaves business exposure unnamed");
+assert(owner.decisionReevaluation.scoreAscii === SCORE_ASCII && owner.decisionReevaluation.scoreEquation === SCORE_EQUATION, "The owner card still stores the priority equation");
 assert(ownerCase?.status === "pending" && !ownerCase.updatedDecision, "The engine leaves the decision pending");
+const scored = planFromInput({ brief: SCORE_BRIEF, existing: "", constraints: "" });
+const scoredCase = scored.decisionReevaluation.cases.find((item) => item.decisionNumber === 142);
+assert(scored.decisionReevaluation.scoreAscii.includes("Evidence Change") && scored.decisionReevaluation.scoreAscii.includes("Business Exposure"), "The score sample stores the priority tree");
+assert(scored.decisionReevaluation.priorityBands.join("|") === PRIORITY_BANDS.join("|"), "The score sample names Low, Medium, High, and Critical");
+assert(scoredCase?.score.factors.map((item) => item.score).join("|") === "0.9|0.8|0.86|0.75", "The score sample keeps 0.90, 0.80, 0.86, and 0.75");
+assert(scoredCase?.score.priority === 0.46, "0.90 × 0.80 × 0.86 × 0.75 is 0.46");
+assert(scoredCase?.score.band === "high", "0.46 classifies as High");
+assert(classifyPriority(0.46) === "high" && classifyPriority(0.19) === "low" && classifyPriority(0.2) === "medium" && classifyPriority(0.7) === "critical", "The bands use the stored thresholds");
+assert(scoredCase?.score.rationale === "0.46 = 0.90 × 0.80 × 0.86 × 0.75", "The score sample stores the inspectable equation");
+assert(Boolean(scoredCase?.score.factors.every((item) => Boolean(item.reason) && item.evidence === "stated")), "Each factor keeps a stated reason");
+assert(scoredCase?.proposal.originalDecision === "Online report generation" && scoredCase?.proposal.confidence === 0.86, "The score sample keeps the owner card");
+assert(!/0\.46|0\.90|0\.75/.test(JSON.stringify(harbor.decisionReevaluation)), "HarborLine does not invent the priority sample");
+assert(!clinic.decisionReevaluation.cases.some((item) => item.score?.priority === 0.46 || item.score?.factors.some((factor) => factor.score === 0.9 || factor.score === 0.75)), "Clinic does not invent the priority sample");
 assert(ownerCard?.decision === "Online report generation", "The ledger still stores Online report generation");
 assert(ownerCase?.state === "TRIGGERED", "The owner card starts TRIGGERED");
 const keptOwner = applyReevaluationChoice(owner, ownerCase?.id ?? "", "maintain");
 assert(keptOwner.decisionLedger.entries.find((item) => item.number === 142)?.decision === "Online report generation", "Keep Decision leaves the recorded choice in place");
 assert(keptOwner.decisionLedger.entries.find((item) => item.number === 142)?.state === "DECISION_RETAINED", "Keep Decision retains DEC-142");
 assert(/stands|stays/i.test(keptOwner.decisionReevaluation.cases[0]?.updatedDecision ?? ""), "Keep Decision records that a person signed");
+assert(keptOwner.orchestration.currentHop === "updated-decision", "Keep Decision moves the path to Updated Decision");
+assert(keptOwner.productLoop.currentCycle === "learn", "Keep Decision moves the cycle to LEARN");
 const changedOwner = applyReevaluationChoice(owner, ownerCase?.id ?? "", "reconsider");
 assert(changedOwner.decisionLedger.entries.find((item) => item.number === 142)?.decision === "Online report generation", "Change Decision still leaves the new choice unnamed");
 assert(changedOwner.decisionLedger.entries.find((item) => item.number === 142)?.state === "DECISION_CHANGED", "Change Decision marks DEC-142 as changed");
@@ -690,6 +820,13 @@ assert(!changedOwner.decisionLedger.entries.some((item) => item.number === 207),
 const ownerSuccessor = changedOwner.decisionLedger.entries.find((item) => item.number === 142 && (item.version ?? 1) === 2);
 assert(Boolean(ownerSuccessor && ownerSuccessor.decision === ""), "Change Decision writes DEC-142 v2");
 assert(changedOwner.decisionLedger.entries.find((item) => item.number === 142 && (item.version ?? 1) === 1)?.decision === "Online report generation", "DEC-142 v1 keeps Online report generation");
+const changedFamily = changedOwner.decisionLedger.versioning.families.find((item) => item.number === 142);
+assert(Boolean(changedFamily?.versions.some((item) => item.version === 1 && item.decision === "Online report generation")), "Change Decision keeps v1 on the version family");
+assert(Boolean(changedFamily?.versions.some((item) => item.version === 2 && item.status === "current")), "Change Decision writes v2 as current");
+assert(!changedFamily?.versions.some((item) => /queued offline generation/i.test(item.decision)), "Change Decision does not invent queued offline generation");
+assert(changedOwner.orchestration.currentHop === "updated-decision", "Change Decision moves the path to Updated Decision");
+assert(changedOwner.productLoop.currentCycle === "execute", "Change Decision moves the cycle to EXECUTE");
+assert(changedOwner.productLoop.currentPhase3 === "opportunity", "Change Decision moves Phase 3 to Product Opportunity");
 const states = planFromInput({ brief: STATES_BRIEF, existing: "", constraints: "" });
 const stateCase = states.decisionReevaluation.cases.find((item) => item.decisionNumber === 142);
 const stateCard = states.decisionLedger.entries.find((item) => item.number === 142);
@@ -720,6 +857,21 @@ assert(versionOne?.replacedById === "DEC-142 v2", "v1 points at v2");
 assert(versionTwo?.replacesId === "DEC-142 v1", "v2 replaces v1");
 assert(versionOne?.lifecycle === "superseded", "v1 stays on the ledger as history");
 assert(versions.decisionLedger.versionAscii.includes("DEC-N v1") && versions.decisionLedger.versionAscii.includes("DEC-N v2"), "The ledger stores the version tree");
+assert(versions.decisionLedger.versioning.ascii === VERSIONING_ASCII, "Decision Versioning stores the v1 → current tree");
+assert(versions.decisionLedger.versioning.question === VERSION_CURRENT, "Decision Versioning asks which version is current");
+const versionFamily = versions.decisionLedger.versioning.families.find((item) => item.number === 142);
+assert(Boolean(versionFamily), "Decision Versioning groups DEC-142");
+assert(versionFamily?.currentId === "DEC-142 v2", "DEC-142 v2 is current");
+assert(versionFamily?.versions.map((item) => `${item.id}|${item.status}|${item.decision}`).join(";") === "DEC-142 v1|superseded|Online reports;DEC-142 v2|current|Support queued offline generation", "The family keeps both version cards");
+assert(versionFamily?.versions[0]?.reasons.join("|") === "Low offline usage", "v1 keeps Low offline usage");
+assert(versionFamily?.versions[1]?.reasons.join("|") === "Offline usage increased|New synchronization infrastructure|Customer feedback", "v2 keeps the three stated reasons");
+assert(Boolean(versionFamily?.changes.some((item) => item.field === "decision" && item.before === "Online reports" && /queued offline generation/i.test(item.after))), "The family diffs Online reports → queued offline generation");
+assert(/DEC-142 v2 is current/i.test(askVersioning({ entries: versions.decisionLedger.entries, query: VERSION_CURRENT }).answer), "Current version names DEC-142 v2");
+assert(/DEC-142 v1/.test(askVersioning({ entries: versions.decisionLedger.entries, query: VERSION_HISTORY }).answer) && /DEC-142 v2/.test(askVersioning({ entries: versions.decisionLedger.entries, query: VERSION_HISTORY }).answer), "Version history names v1 and v2");
+assert(!harbor.decisionLedger.versioning.families.some((item) => item.versions.some((row) => /queued offline generation|low offline usage/i.test(`${row.decision} ${row.reasons.join(" ")}`) || row.version > 1)), "HarborLine versioning does not invent DEC-142 v2");
+assert(harbor.decisionLedger.versioning.families.every((item) => item.versions.length === 1 && item.versions[0]?.status === "current"), "HarborLine decisions stay on v1");
+assert(!clinic.decisionLedger.versioning.families.some((item) => item.versions.some((row) => row.version > 1 || /queued offline generation/i.test(row.decision))), "Clinic versioning does not invent DEC-142 v2");
+assert((offline.decisionLedger.versioning.families.find((item) => item.number === 142)?.versions[0]?.version ?? 1) === 1, "Offline reports #142 versioning stays v1");
 assert(!/online reports|queued offline generation|low offline usage/i.test(JSON.stringify(harbor.decisionLedger.entries.map((item) => `${item.decision} ${item.reason}`))), "HarborLine does not invent the version cards");
 assert(!clinic.decisionLedger.entries.some((item) => (item.version ?? 1) > 1 || /queued offline generation/i.test(item.decision)), "Clinic does not invent DEC-142 v2");
 assert((offline.decisionLedger.entries.find((item) => item.number === 142)?.version ?? 1) === 1, "Offline reports #142 stays v1");
@@ -756,6 +908,8 @@ assert(review142?.recommendation === "Review decision #142.", "The recommendatio
 assert(review142?.channel === "analytics", "The 38% rise is analytics evidence");
 assert(review142?.status === "pending", "The #142 review starts pending");
 assert(review142?.proposal.confidence == null, "The #142 review does not invent 0.86");
+assert(review142?.score.priority == null, "The #142 review leaves priority unnamed");
+assert(!review142?.score.factors.some((item) => item.score === 0.9 || item.score === 0.75), "The #142 review stays off the 0.90 / 0.75 sample");
 assert(review142?.proposal.proposedAction === "Review decision #142.", "The #142 review proposes a review");
 assert(!/online report generation|reconsider offline support|connectivity is usually present/i.test(JSON.stringify(review142?.proposal)), "The #142 review keeps Queue and sync off the owner-card sample");
 assert(/queue and sync/i.test(review142?.proposal.originalDecision ?? ""), "The #142 review still names Queue and sync");
@@ -800,6 +954,7 @@ assert(harbor.decisionReevaluation.ascii === REEVAL_ASCII, "HarborLine still sto
 assert(!clinic.decisionReevaluation.cases.some((item) => item.decisionNumber === 142 || /38%/.test(item.evidence.text)), "Clinic does not invent a #142 review");
 assert(!billing.decisionReevaluation.cases.some((item) => /38%/.test(item.evidence.text)), "Billing does not invent a 38% offline rise");
 assert(!farmer.decisionReevaluation.cases.some((item) => item.decisionNumber === 142), "A proposed MVP does not invent a #142 review");
+assert(!farmer.decisionReevaluation.cases.some((item) => item.score?.priority === 0.46), "A proposed MVP does not invent priority 0.46");
 assert(rememberPlan(emptyMemory(), reeval).items.some((item) => /re-evaluation/i.test(item.text) && /#142/.test(item.text)), "Memory stores the re-evaluation");
 
 assert(harbor.productGraph.nodes.some((item) => item.kind === "customer" && /inspector/i.test(item.label)), "The graph names the inspector");
@@ -825,6 +980,35 @@ assert(!/most users will export reports as pdf/i.test(askGraph(harbor, GRAPH_ASS
 assert(/#142|38%|offline/i.test(askGraph(reeval, GRAPH_FEEDBACK).answer), "New offline usage feedback moves Decision #142");
 assert(!/#142/.test(askGraph(clinic, GRAPH_FEEDBACK).answer), "Clinic feedback does not invent Decision #142");
 assert(/knowledge graph|customer/i.test(harbor.handoff.architect), "The architect brief receives the knowledge graph");
+assert(harbor.productGraph.lineageAscii === LINEAGE_ASCII, "HarborLine stores the decision lineage tree");
+assert(LINEAGE_LAYERS.join("|") === "feedback|evidence|assumption|decision|feature|engineering|outcome", "Lineage names the seven layers");
+const harborOfflineLineage = harbor.productGraph.lineages.find((item) => /offline/i.test(item.feature));
+assert(Boolean(harborOfflineLineage), "HarborLine Offline capture has a lineage");
+assert(/inspector|paper|packet|offline/i.test(harborOfflineLineage?.causedBy ?? ""), "HarborLine Offline capture traces back to inspectors, paper, or offline work");
+assert(/feedback:/.test(harborOfflineLineage?.causedBy ?? "") && /feature:/.test(harborOfflineLineage?.causedBy ?? ""), "HarborLine Offline capture walks feedback through the feature");
+assert(!/queued offline generation|online reports|low offline usage/i.test(JSON.stringify(harbor.productGraph.lineages)), "HarborLine does not invent the lineage sample");
+assert(/phone|validate|appointment/i.test(askGraph(clinic, GRAPH_CAUSED).answer), "Clinic lineage keeps the phone problem on validation");
+assert(!/queued offline generation|online reports/i.test(askGraph(clinic, GRAPH_CAUSED).answer), "Clinic does not invent the lineage sample");
+assert(!versions.productGraph.lineages.some((item) => item.id === "LIN-stated"), "Version cards do not become a stated lineage");
+assert(!/online reports|queued offline generation/i.test(askGraph(offline, GRAPH_CAUSED).answer), "Offline reports #142 stays off the isolated lineage sample");
+const lineage = planFromInput({ brief: LINEAGE_BRIEF, existing: "", constraints: "" });
+const statedLineage = lineage.productGraph.lineages.find((item) => item.id === "LIN-stated");
+assert(Boolean(statedLineage), "The lineage sample stores the stated chain");
+assert(LINEAGE_LAYERS.every((layer) => statedLineage?.steps.some((step) => step.layer === layer)), "The lineage sample walks every layer");
+assert(/reports fail when the device is offline/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated customer feedback");
+assert(/offline usage increased/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated evidence");
+assert(/wait until they have a connection/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated assumption");
+assert(/support queued offline generation/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated decision");
+assert(/queued offline generation/i.test(statedLineage?.feature ?? ""), "The lineage sample keeps the stated feature");
+assert(/synchronize queued jobs/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated engineering work");
+assert(/reports finish after the device reconnects/i.test(statedLineage?.causedBy ?? ""), "The lineage sample keeps the stated product outcome");
+assert(lineage.productGraph.nodes.some((item) => item.id === "EVD-new" && /queued jobs complete/i.test(item.label)), "The lineage sample stores new evidence as the loop");
+const causedLineage = askGraph(lineage, GRAPH_CAUSED);
+assert(causedLineage.kind === "caused", "The caused query is a lineage walk");
+assert(/queued offline generation exists because/i.test(causedLineage.answer), "The caused query names the feature");
+assert(/feedback: reports fail when the device is offline/i.test(causedLineage.answer), "The caused query traces back to customer feedback");
+assert(/assumption: users can wait until they have a connection/i.test(causedLineage.answer), "The caused query traces through the assumption");
+assert(!farmer.productGraph.lineages.some((item) => /queued offline generation/i.test(item.feature)), "A proposed MVP does not invent the lineage sample");
 
 const OPPORTUNITY_KEYS = ["customerImpact", "businessImpact", "strategicAlignment", "reach", "confidence", "evidenceQuality", "effort", "risk"];
 function scoredOpportunity(plan: { opportunityScoring: { items: { opportunity: string; score: number; rationale: string; factors: { key: string; sign: number; score: number; reason: string; evidence: string }[] }[] } }, name: string | RegExp) {
@@ -1032,6 +1216,13 @@ assert(!/17%/.test(JSON.stringify(harbor.decisionEngine.options.map((item) => it
 assert(!clinic.decisionEngine.options.some((item) => item.id === "OPT-investigate"), "Clinic stays on validation, not a funnel investigation");
 assert(signal.productLoop.note === LOOP_NOTE, "Report signal stores the agent-loop note");
 assert(signal.productLoop.engineAscii === LOOP_AUTONOMOUS_ASCII, "Report signal stores the autonomous loop tree");
+assert(signal.productLoop.phase3Ascii === PHASE3_ASCII, "Report signal stores the Phase 3 loop");
+assert(signal.productLoop.currentPhase3 === "monitor" || signal.productLoop.currentPhase3 === "reevaluate", "A live anomaly is on Continuous Monitoring or Decision Re-evaluation");
+assert(Boolean(signal.productLoop.phase3.find((item) => item.id === "monitor" && /17%/.test(item.finding)) || signal.productLoop.phase3.find((item) => item.id === "data" && /17%/.test(item.finding))), "Phase 3 keeps the 17% export drop");
+assert(signal.productLoop.cycleAscii === REEVAL_CYCLE_ASCII, "Report signal stores the re-evaluation cycle");
+assert(signal.productLoop.cycle.map((item) => item.id).join("|") === REEVAL_CYCLE_IDS.join("|"), "Report signal walks observe → learn");
+assert(signal.productLoop.currentCycle === "detect" || signal.productLoop.currentCycle === "reevaluate", "A live anomaly is on DETECT or RE-EVALUATE");
+assert(Boolean(signal.productLoop.cycle.find((item) => item.id === "detect" && /17%/.test(item.text)) || signal.productLoop.cycle.find((item) => item.id === "observe" && /17%/.test(item.text))), "The cycle keeps the 17% export drop");
 assert(signal.productLoop.stages.map((item) => item.id).join("|") === LOOP_STAGE_IDS.join("|"), "The agent loop has every operating stage");
 assert(signal.productLoop.current === "analyze", "A live anomaly stays on analyze");
 assert(signal.productLoop.next === "decide", "After the investigation, the loop waits on decide");

@@ -359,6 +359,82 @@ Successor:
 DEC-207
 `;
 
+export const SCORE_BRIEF = `${HUMAN_OWNER_BRIEF}
+
+Evidence change:
+0.90
+
+Decision impact:
+0.80
+
+Business exposure:
+0.75
+`;
+
+export const CHANGED_BRIEF = `Decision #142
+
+Question:
+Should report generation require an internet connection?
+
+Decision title:
+Offline Reporting
+
+Original Decision:
+Online report generation
+
+Decision:
+Online report generation
+
+Observation:
+8% of report requests currently happen offline.
+
+Assumption:
+Connectivity is usually available
+
+Changed Assumption:
+Connectivity is usually available
+
+Affected assumption:
+A-01
+
+Original:
+8%
+
+Current:
+31%
+
+Change:
++23 percentage points
+
+What changed:
+Offline usage
+8% → 31%
+
+Support requests
+4/month → 27/month
+
+Customer segment
+No enterprise requirement → Required
+
+Trigger:
+Offline usage increased to 31%
+
+Impact:
+High
+
+Proposed Action:
+Reconsider offline report generation.
+
+Confidence:
+0.86
+
+Re-evaluation:
+Required
+
+Metric trigger
+offline_usage > 25%
+`;
+
 export const VERSION_BRIEF = `DEC-142 v1
 Decision:
 Online reports
@@ -374,6 +450,31 @@ Reason:
 Offline usage increased
 New synchronization infrastructure
 Customer feedback
+`;
+
+export const LINEAGE_BRIEF = `Customer feedback:
+Reports fail when the device is offline.
+
+Evidence:
+Offline usage increased.
+
+Assumption:
+Users can wait until they have a connection.
+
+Decision:
+Support queued offline generation
+
+Feature:
+Queued offline generation
+
+Engineering:
+Synchronize queued jobs when the device reconnects.
+
+Product outcome:
+Reports finish after the device reconnects.
+
+New evidence:
+Queued jobs complete after reconnect.
 `;
 
 export const OFFLINE_STALE_EXISTING = `Inspectors now have continuous LTE on every assigned route.

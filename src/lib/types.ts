@@ -509,9 +509,33 @@ export type SpecialistReport = {
   output: string;
 };
 
+export type ConnectedHopId =
+  | "discovery"
+  | "opportunities"
+  | "decision-engine"
+  | "ledger"
+  | "reevaluation"
+  | "architect"
+  | "analytics"
+  | "feedback"
+  | "impact"
+  | "approval"
+  | "updated-decision";
+
+export type ConnectedHop = {
+  id: ConnectedHopId;
+  name: string;
+  finding: string;
+  evidence: Evidence;
+};
+
 export type Orchestration = {
   note: string;
   ascii: string;
+  connectedNote: string;
+  connectedAscii: string;
+  hops: ConnectedHop[];
+  currentHop: ConnectedHopId;
   agents: SpecialistReport[];
   decision: string;
 };
@@ -646,15 +670,54 @@ export type LedgerEntry = {
 
 export type LedgerAnswer = {
   query: string;
-  kind: "why" | "assumptions" | "search";
+  kind: "why" | "assumptions" | "search" | "version";
   entries: LedgerEntry[];
   answer: string;
+};
+
+export type DecisionVersionStatus = "current" | "superseded";
+
+export type DecisionVersion = {
+  id: string;
+  decisionId: string;
+  number: number;
+  version: number;
+  decision: string;
+  reasons: string[];
+  status: DecisionVersionStatus;
+  replacesId?: string;
+  replacedById?: string;
+  entryId: string;
+};
+
+export type DecisionVersionChange = {
+  field: "decision" | "reason";
+  before: string;
+  after: string;
+  evidence: Evidence;
+};
+
+export type DecisionVersionFamily = {
+  decisionId: string;
+  number: number;
+  currentId: string;
+  versions: DecisionVersion[];
+  changes: DecisionVersionChange[];
+  ascii: string;
+};
+
+export type DecisionVersioning = {
+  note: string;
+  ascii: string;
+  question: string;
+  families: DecisionVersionFamily[];
 };
 
 export type DecisionLedger = {
   note: string;
   ascii: string;
   versionAscii: string;
+  versioning: DecisionVersioning;
   entries: LedgerEntry[];
   nextNumber: number;
 };
@@ -697,6 +760,27 @@ export type ReevaluationOption = {
   summary: string;
 };
 
+export type ReevaluationPriorityBand = "low" | "medium" | "high" | "critical";
+export type ReevaluationScoreFactorKey = "evidenceChange" | "decisionImpact" | "confidence" | "businessExposure";
+
+export type ReevaluationScoreFactor = {
+  key: ReevaluationScoreFactorKey;
+  label: string;
+  score: number | null;
+  reason: string;
+  evidence: Evidence;
+};
+
+export type ReevaluationScore = {
+  note: string;
+  ascii: string;
+  equation: string;
+  factors: ReevaluationScoreFactor[];
+  priority: number | null;
+  band: ReevaluationPriorityBand | null;
+  rationale: string;
+};
+
 export type ReevaluationProposal = {
   originalDecision: string;
   trigger: string;
@@ -704,6 +788,26 @@ export type ReevaluationProposal = {
   impact: ReevaluationImpact;
   proposedAction: string;
   confidence: number | null;
+};
+
+export type WhatChangedDelta = {
+  metric: string;
+  before: string;
+  after: string;
+  evidence: Evidence;
+};
+
+export type WhatChangedAssumption = {
+  id: string;
+  statement: string;
+  status: string;
+};
+
+export type WhatChangedView = {
+  title: string;
+  deltas: WhatChangedDelta[];
+  assumption: WhatChangedAssumption | null;
+  action: string;
 };
 
 export type ReevaluationCase = {
@@ -726,6 +830,8 @@ export type ReevaluationCase = {
   comparison: ReevaluationComparison;
   pipeline: ReevaluationStage[];
   proposal: ReevaluationProposal;
+  whatChanged: WhatChangedView;
+  score: ReevaluationScore;
   state: DecisionState;
   stateHistory: DecisionState[];
   successorId?: string;
@@ -741,6 +847,12 @@ export type DecisionReevaluation = {
   stages: ReevaluationStage[];
   states: DecisionState[];
   stateAscii: string;
+  scoreNote: string;
+  scoreAscii: string;
+  scoreEquation: string;
+  priorityBands: ReevaluationPriorityBand[];
+  whatChangedNote: string;
+  whatChangedAscii: string;
   channels: { kind: ReevaluationChannel; lines: DecisionFact[] }[];
   options: ReevaluationOption[];
   cases: ReevaluationCase[];
@@ -756,7 +868,28 @@ export type GraphNodeKind =
   | "risk"
   | "experiment"
   | "metric"
-  | "outcome";
+  | "outcome"
+  | "feedback"
+  | "evidence"
+  | "assumption"
+  | "engineering";
+
+export type LineageLayer = "feedback" | "evidence" | "assumption" | "decision" | "feature" | "engineering" | "outcome";
+
+export type LineageStep = {
+  layer: LineageLayer;
+  label: string;
+  evidence: Evidence;
+  nodeId?: string;
+};
+
+export type DecisionLineage = {
+  id: string;
+  feature: string;
+  featureId?: string;
+  steps: LineageStep[];
+  causedBy: string;
+};
 
 export type GraphNode = {
   id: string;
@@ -773,7 +906,7 @@ export type GraphEdge = {
 
 export type GraphAnswer = {
   query: string;
-  kind: "biggest" | "weak" | "assumptions" | "feedback" | "search";
+  kind: "biggest" | "weak" | "assumptions" | "feedback" | "caused" | "search";
   nodes: GraphNode[];
   answer: string;
 };
@@ -781,8 +914,10 @@ export type GraphAnswer = {
 export type ProductGraph = {
   note: string;
   ascii: string;
+  lineageAscii: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  lineages: DecisionLineage[];
 };
 
 export type OpportunityFactorKey =
@@ -946,17 +1081,60 @@ export type LoopStage = {
 
 export type LoopMode = "autonomous" | "waiting";
 
+export type ReevalCycleId =
+  | "observe"
+  | "detect"
+  | "reevaluate"
+  | "propose"
+  | "approve"
+  | "execute"
+  | "measure"
+  | "learn";
+
+export type ReevalCycleStage = {
+  id: ReevalCycleId;
+  label: string;
+  text: string;
+  status: LoopStageStatus;
+  evidence: Evidence;
+};
+
+export type Phase3Id =
+  | "data"
+  | "monitor"
+  | "reevaluate"
+  | "opportunity"
+  | "prd"
+  | "architect"
+  | "engineering";
+
+export type Phase3Stage = {
+  id: Phase3Id;
+  name: string;
+  finding: string;
+  status: LoopStageStatus;
+  evidence: Evidence;
+};
+
 export type ProductLoop = {
   note: string;
   ascii: string;
   engineAscii: string;
+  cycleNote: string;
+  cycleAscii: string;
+  phase3Note: string;
+  phase3Ascii: string;
   current: LoopStageId;
   next: LoopStageId;
+  currentCycle: ReevalCycleId;
+  currentPhase3: Phase3Id;
   mode: LoopMode;
   authorization: AuthorizationLevel;
   action: string;
   blocker: string;
   stages: LoopStage[];
+  cycle: ReevalCycleStage[];
+  phase3: Phase3Stage[];
 };
 
 export type ChangeImpact = {
@@ -980,6 +1158,31 @@ export type ProductContext = {
   conflicts: ContextHit[];
 };
 
+export type ApproachPosture = "validate" | "proposed-mvp" | "stated-scope" | "repair";
+
+export type ApproachStep = {
+  title: string;
+  detail: string;
+};
+
+export type ApproachAlternative = {
+  title: string;
+  reason: string;
+};
+
+export type ClientApproach = {
+  note: string;
+  ascii: string;
+  posture: ApproachPosture;
+  headline: string;
+  pitch: string;
+  firstSlice: string;
+  steps: ApproachStep[];
+  later: string[];
+  questions: string[];
+  alternatives: ApproachAlternative[];
+};
+
 export type ProductPlan = {
   id: string;
   createdAt: string;
@@ -988,6 +1191,7 @@ export type ProductPlan = {
   note: string;
   proposed: boolean;
   maturity: Maturity;
+  approach: ClientApproach;
   input: ProductInput;
   sourceText: string;
   research: Finding[];

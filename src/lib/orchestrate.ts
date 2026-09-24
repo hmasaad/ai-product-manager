@@ -1,5 +1,13 @@
 import { APPROVAL_LABEL, pendingMandatory } from "./approval";
-import type { ProductPlan, SpecialistId, SpecialistReport, StepId } from "./types";
+import type {
+  ConnectedHop,
+  ConnectedHopId,
+  Evidence,
+  ProductPlan,
+  SpecialistId,
+  SpecialistReport,
+  StepId,
+} from "./types";
 
 export const ORCHESTRATE_NOTE =
   "The product manager is an orchestrator. Six specialists do the research, requirements, analytics, market, risk, and experiment work. Their outputs meet at a product decision. A person still signs before a commit.";
@@ -16,6 +24,69 @@ export const ORCHESTRATE_ASCII = `                 AI PRODUCT MANAGER
                          │
                          ↓
                   Product Decision`;
+
+export const CONNECTED_NOTE =
+  "Discovery and the Decision Engine now share one path. Re-evaluation asks Architect, Analytics, and Feedback for impact, then a person approves any updated decision.";
+
+export const CONNECTED_ASCII = `                 AI PRODUCT MANAGER
+                         │
+            ┌────────────┴────────────┐
+            ↓                         ↓
+      Product Discovery        Decision Engine
+            │                         │
+            ↓                         ↓
+       Opportunities          Decision Ledger
+                                      │
+                                      ↓
+                              Re-evaluation
+                                      │
+                         ┌────────────┼────────────┐
+                         ↓            ↓            ↓
+                    Architect     Analytics     Feedback
+                         │            │            │
+                         └────────────┼────────────┘
+                                      ↓
+                               Impact Analysis
+                                      │
+                                      ↓
+                                Human Approval
+                                      │
+                                      ↓
+                              Updated Decision`;
+
+export const CONNECTED_HOP_IDS: ConnectedHopId[] = [
+  "discovery",
+  "opportunities",
+  "decision-engine",
+  "ledger",
+  "reevaluation",
+  "architect",
+  "analytics",
+  "feedback",
+  "impact",
+  "approval",
+  "updated-decision",
+];
+
+export const CONNECTED_HOP_NAME: Record<ConnectedHopId, string> = {
+  discovery: "Product Discovery",
+  opportunities: "Opportunities",
+  "decision-engine": "Decision Engine",
+  ledger: "Decision Ledger",
+  reevaluation: "Re-evaluation",
+  architect: "Architect",
+  analytics: "Analytics",
+  feedback: "Feedback",
+  impact: "Impact Analysis",
+  approval: "Human Approval",
+  "updated-decision": "Updated Decision",
+};
+
+const AGENT_TO_HOP: Partial<Record<SpecialistId, ConnectedHopId>> = {
+  research: "opportunities",
+  analytics: "reevaluation",
+  decision: "ledger",
+};
 
 export const SPECIALIST_IDS: SpecialistId[] = [
   "research",
@@ -182,16 +253,148 @@ function decisionReport(plan: ProductPlan): SpecialistReport {
   );
 }
 
+function clip(text: string, n = 140) {
+  const next = text.replace(/\s+/g, " ").trim();
+  return next.length <= n ? next : `${next.slice(0, n - 1).trim()}…`;
+}
+
+function hopOf(id: ConnectedHopId, finding: string, evidence: Evidence): ConnectedHop {
+  return { id, name: CONNECTED_HOP_NAME[id], finding, evidence };
+}
+
+function openCase(plan: ProductPlan) {
+  const cases = plan.decisionReevaluation?.cases ?? [];
+  return (
+    cases.find((item) => item.updatedDecision) ??
+    cases.find((item) => item.state === "UNDER_REVIEW" || item.state === "TRIGGERED") ??
+    cases.find((item) => (item.whatChanged?.deltas.length ?? 0) > 0) ??
+    cases[0]
+  );
+}
+
+function currentHopOf(plan: ProductPlan): ConnectedHopId {
+  const item = openCase(plan);
+  if (item?.state === "DECISION_CHANGED" || item?.state === "DECISION_RETAINED" || item?.state === "VALIDATED") {
+    return "updated-decision";
+  }
+  if (item?.state === "UNDER_REVIEW") return "approval";
+  if (item && (item.state === "TRIGGERED" || item.status === "pending" || (item.whatChanged?.deltas.length ?? 0) > 0)) {
+    return "reevaluation";
+  }
+  if (plan.maturity === "problem") return "discovery";
+  if (plan.proposed) return "opportunities";
+  if ((plan.decisionLedger?.entries.length ?? 0) > 0) return "ledger";
+  if ((plan.decisionEngine?.options.length ?? 0) > 0) return "decision-engine";
+  return "discovery";
+}
+
+export function buildConnectedHops(plan: ProductPlan): ConnectedHop[] {
+  const item = openCase(plan);
+  const delta = item?.whatChanged?.deltas[0];
+  const deltaText = delta ? `${delta.metric} ${delta.before} → ${delta.after}` : "";
+  const opportunity = plan.recommendations[0]?.opportunity || plan.opportunityScoring?.items[0]?.opportunity || "";
+  const entry = plan.decisionLedger?.entries[0];
+  const ledgerLabel = entry ? `DEC-${entry.number} v${entry.version ?? 1}` : "";
+  const feedbackLine = plan.decisionReevaluation?.channels.find((ctx) => ctx.kind === "feedback")?.lines[0];
+  const feedbackDelta = item?.whatChanged?.deltas.find((row) => /support|feedback|customer|segment/i.test(row.metric));
+  const analyticsLine = plan.decisionReevaluation?.channels.find((ctx) => ctx.kind === "analytics")?.lines[0];
+  const analyticsSignal = plan.analytics?.signals[0]?.detail;
+  const impact = plan.impacts[0];
+  const pending = pendingMandatory(plan)[0];
+  const constraint = plan.constraints[0] || plan.discovery.constraints[0]?.text || "";
+
+  return [
+    hopOf(
+      "discovery",
+      clip(plan.discovery.problemStatement || plan.title || "Product Discovery named the request."),
+      plan.discovery.problemStatement ? "stated" : "inferred",
+    ),
+    hopOf(
+      "opportunities",
+      opportunity ? clip(opportunity) : "No opportunity was scored.",
+      opportunity ? "inferred" : "unknown",
+    ),
+    hopOf(
+      "decision-engine",
+      clip(plan.decisionEngine?.question || "The Decision Engine has not named a question."),
+      plan.decisionEngine?.question ? "inferred" : "unknown",
+    ),
+    hopOf(
+      "ledger",
+      entry ? clip(`${ledgerLabel}: ${entry.decision || "Decision text was not named."}`) : "No ledger entry.",
+      entry ? "stated" : "unknown",
+    ),
+    hopOf(
+      "reevaluation",
+      deltaText
+        ? clip(`${item?.whatChanged.title ?? "Decision"} — ${deltaText}`)
+        : "No recorded decision has new contradicting evidence.",
+      deltaText ? (delta?.evidence ?? "stated") : "unknown",
+    ),
+    hopOf(
+      "architect",
+      constraint ? clip(constraint) : "No architecture constraint was named.",
+      constraint ? "stated" : "unknown",
+    ),
+    hopOf(
+      "analytics",
+      clip(analyticsLine?.text || deltaText || analyticsSignal || "No live telemetry was named."),
+      analyticsLine || deltaText || analyticsSignal ? (analyticsLine?.evidence ?? delta?.evidence ?? "stated") : "unknown",
+    ),
+    hopOf(
+      "feedback",
+      clip(feedbackLine?.text || (feedbackDelta ? `${feedbackDelta.metric} ${feedbackDelta.before} → ${feedbackDelta.after}` : "No named feedback.")),
+      feedbackLine || feedbackDelta ? (feedbackLine?.evidence ?? feedbackDelta?.evidence ?? "stated") : "unknown",
+    ),
+    hopOf(
+      "impact",
+      impact
+        ? clip(`${impact.change} (${impact.severity})`)
+        : item?.whatChanged.assumption
+          ? clip(`${item.whatChanged.assumption.id}: ${item.whatChanged.assumption.statement}`)
+          : "No blast radius was named.",
+      impact || item?.whatChanged.assumption ? "inferred" : "unknown",
+    ),
+    hopOf(
+      "approval",
+      pending ? clip(pending.proposal) : item?.state === "UNDER_REVIEW" ? "A person still signs." : "No mandatory gate is waiting.",
+      pending ? "stated" : "inferred",
+    ),
+    hopOf(
+      "updated-decision",
+      item?.updatedDecision
+        ? clip(item.updatedDecision)
+        : "The recorded decision stays until a person reviews it.",
+      item?.updatedDecision ? "stated" : "inferred",
+    ),
+  ];
+}
+
+function connectAgent(agent: SpecialistReport, hops: ConnectedHop[]): SpecialistReport {
+  const hopId = AGENT_TO_HOP[agent.id];
+  const hop = hops.find((item) => item.id === hopId);
+  if (!hop) return agent;
+  return {
+    ...agent,
+    findings: [...agent.findings, `Hands to ${hop.name}: ${hop.finding}`],
+  };
+}
+
 export function emptyOrchestration() {
   return {
     note: ORCHESTRATE_NOTE,
     ascii: ORCHESTRATE_ASCII,
+    connectedNote: CONNECTED_NOTE,
+    connectedAscii: CONNECTED_ASCII,
+    hops: [] as ConnectedHop[],
+    currentHop: "discovery" as ConnectedHopId,
     agents: [] as SpecialistReport[],
     decision: "",
   };
 }
 
 export function buildOrchestration(plan: ProductPlan) {
+  const hops = buildConnectedHops(plan);
   const agents = [
     researchReport(plan),
     requirementsReport(plan),
@@ -200,10 +403,14 @@ export function buildOrchestration(plan: ProductPlan) {
     riskReport(plan),
     experimentReport(plan),
     decisionReport(plan),
-  ];
+  ].map((agent) => connectAgent(agent, hops));
   return {
     note: ORCHESTRATE_NOTE,
     ascii: ORCHESTRATE_ASCII,
+    connectedNote: CONNECTED_NOTE,
+    connectedAscii: CONNECTED_ASCII,
+    hops,
+    currentHop: currentHopOf(plan),
     agents,
     decision: agents.find((item) => item.id === "decision")?.output ?? "",
   };
@@ -212,13 +419,28 @@ export function buildOrchestration(plan: ProductPlan) {
 export function orchestrationMarkdown(plan: ProductPlan) {
   const board = plan.orchestration;
   if (!board?.agents.length) return "Specialists have not run.";
+  const hops = (board.hops ?? [])
+    .map((item) => `- ${item.name}${item.id === board.currentHop ? " (now)" : ""}: ${item.finding}`)
+    .join("\n");
   const body = board.agents
     .map((agent) => {
       const findings = agent.findings.map((line) => `- ${line}`).join("\n");
       return `### ${agent.name}\n\n${agent.role}\n\n${findings}\n\nHandoff: ${agent.output}`;
     })
     .join("\n\n");
-  return `${board.decision}\n\n${body}`;
+  return `${board.connectedNote}
+
+\`\`\`
+${board.connectedAscii}
+\`\`\`
+
+Now: ${CONNECTED_HOP_NAME[board.currentHop]}
+
+${hops}
+
+${board.decision}
+
+${body}`;
 }
 
 export function agentForStep(id: StepId): SpecialistId {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { APPROACH_ASCII, APPROACH_LABEL, APPROACH_NOTE } from "@/lib/approach";
 import { planMarkdown } from "@/lib/handoff";
 import { prdMarkdown } from "@/lib/prd";
 import { AMBIGUITY_NOTE } from "@/lib/ambiguity";
@@ -21,18 +22,20 @@ import {
 } from "@/lib/approval";
 import { DECIDE_NOTE, DECIDE_QUESTION, applyDecisionChoice } from "@/lib/decide";
 import { LEDGER_NOTE, STALE_ASSUMPTIONS, VERSION_ASCII, WHY_ARCHITECTURE, askLedger, decisionLabel, ledgerObject, structureEntry } from "@/lib/ledger";
-import { DECISION_STATES, REEVAL_CHANNEL_LABEL, REEVAL_LABEL, REEVAL_NOTE, REEVAL_QUESTION, REEVAL_WARNING, STATE_ASCII, STATE_LABEL, TRIGGER_KINDS, TRIGGER_LABEL, applyReevaluationChoice } from "@/lib/reevaluate";
-import { GRAPH_ASSUMPTIONS, GRAPH_BIGGEST, GRAPH_FEEDBACK, GRAPH_NOTE, GRAPH_WEAK, askGraph, graphPaths } from "@/lib/graph";
+import { VERSION_CURRENT, VERSION_HISTORY, VERSIONING_NOTE, buildVersioning } from "@/lib/versioning";
+import { CHANGED_ASCII, CHANGED_NOTE, CHANGED_STATUS, DECISION_STATES, PRIORITY_BANDS, PRIORITY_LABEL, REEVAL_CHANNEL_LABEL, REEVAL_LABEL, REEVAL_NOTE, REEVAL_QUESTION, REEVAL_WARNING, SCORE_ASCII, SCORE_EQUATION, SCORE_NOTE as REEVAL_SCORE_NOTE, STATE_ASCII, STATE_LABEL, TRIGGER_KINDS, TRIGGER_LABEL, applyReevaluationChoice } from "@/lib/reevaluate";
+import { GRAPH_ASSUMPTIONS, GRAPH_BIGGEST, GRAPH_CAUSED, GRAPH_FEEDBACK, GRAPH_NOTE, GRAPH_WEAK, LINEAGE_ASCII, askGraph, graphPaths } from "@/lib/graph";
 import { OPPORTUNITY_NOTE } from "@/lib/score";
 import { PORTFOLIO_BET_LABEL, PORTFOLIO_LABEL, PORTFOLIO_NOTE, PORTFOLIO_QUESTION, applyPortfolioChoice } from "@/lib/portfolio";
 import { MONITOR_NOTE } from "@/lib/monitor";
-import { LOOP_NOTE, LOOP_QUESTION, applyLoopAdvance, buildProductLoop } from "@/lib/loop";
+import { LOOP_NOTE, LOOP_QUESTION, PHASE3_NAME, PHASE3_NOTE, REEVAL_CYCLE_LABEL, REEVAL_CYCLE_NOTE, applyLoopAdvance, buildProductLoop } from "@/lib/loop";
 import { KIND_LABEL, TRACE_NOTE, whyThis } from "@/lib/trace";
-import { ORCHESTRATE_NOTE } from "@/lib/orchestrate";
+import { CONNECTED_HOP_NAME, CONNECTED_NOTE, ORCHESTRATE_NOTE, buildOrchestration } from "@/lib/orchestrate";
 import { saveMemoryRemote, savePlan } from "@/lib/storage";
 import type { AmbiguitySeverity, Decision, DecisionStatus, Evidence, ImpactLevel, Priority, ProductPlan, ReevaluationVerdict, TaggedLine } from "@/lib/types";
 
 const SECTIONS = [
+  ["approach", "Approach"],
   ["orchestrate", "Agents"],
   ["context", "Context"],
   ["discovery", "Discovery"],
@@ -158,7 +161,14 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
   const paths = useMemo(() => graphPaths(live), [live]);
 
   function persist(next: ProductPlan) {
-    const refreshed = { ...next, productLoop: buildProductLoop(next) };
+    const refreshed = {
+      ...next,
+      productLoop: buildProductLoop(next),
+      orchestration: buildOrchestration(next),
+      decisionLedger: next.decisionLedger
+        ? { ...next.decisionLedger, versioning: buildVersioning(next.decisionLedger.entries ?? []) }
+        : next.decisionLedger,
+    };
     setLive(refreshed);
     savePlan(refreshed);
     return refreshed;
@@ -282,15 +292,98 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           </button>
         </div>
 
+        <section id="approach" className="mt-12 scroll-mt-6">
+          <h2 className="font-serif text-2xl text-navy">Approach to suggest</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{plan.approach?.note ?? APPROACH_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {plan.approach?.ascii ?? APPROACH_ASCII}
+          </pre>
+          <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">
+            {APPROACH_LABEL[plan.approach?.posture ?? "validate"]}
+          </p>
+          <h3 className="mt-2 font-serif text-xl text-navy">{plan.approach?.headline}</h3>
+          <p className="mt-3 text-sm leading-6">{plan.approach?.pitch}</p>
+          <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">First slice</p>
+          <p className="mt-1 text-sm leading-6">{plan.approach?.firstSlice}</p>
+          {(plan.approach?.steps ?? []).length > 0 && (
+            <ol className="mt-4 space-y-3">
+              {plan.approach.steps.map((item, index) => (
+                <li key={`${item.title}-${index}`} className="rounded-2xl border border-rule bg-white/70 p-4">
+                  <h4 className="font-serif text-lg text-navy">{item.title}</h4>
+                  <p className="mt-1 text-sm leading-6">{item.detail}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Confirm with the client</p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                {(plan.approach?.questions ?? []).length ? (
+                  plan.approach.questions.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)
+                ) : (
+                  <li>None named.</li>
+                )}
+              </ul>
+            </article>
+            <article className="rounded-2xl border border-rule bg-white/70 p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Hold for later</p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
+                {(plan.approach?.later ?? []).length ? (
+                  plan.approach.later.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)
+                ) : (
+                  <li>None named.</li>
+                )}
+              </ul>
+            </article>
+          </div>
+          {(plan.approach?.alternatives ?? []).length > 0 && (
+            <div className="mt-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Other approaches</p>
+              <ol className="mt-3 space-y-3">
+                {plan.approach.alternatives.map((item, index) => (
+                  <li key={`${item.title}-${index}`} className="rounded-2xl border border-rule bg-white/70 p-4">
+                    <h4 className="font-serif text-lg text-navy">{item.title}</h4>
+                    <p className="mt-1 text-sm leading-6">{item.reason}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </section>
+
         <section id="orchestrate" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Specialized Agents</h2>
-          <p className="mt-3 text-sm leading-6 text-ink-soft">{ORCHESTRATE_NOTE}</p>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{CONNECTED_NOTE}</p>
+          <p className="mt-2 text-sm leading-6 text-ink-soft">{ORCHESTRATE_NOTE}</p>
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
-            {plan.orchestration?.ascii}
+            {live.orchestration?.connectedAscii}
           </pre>
-          <p className="mt-4 font-serif text-xl text-navy">{plan.orchestration?.decision}</p>
+          <p className="mt-4 font-serif text-xl text-navy">
+            Now: {CONNECTED_HOP_NAME[live.orchestration?.currentHop ?? "discovery"]}
+          </p>
+          <ol className="mt-4 grid gap-3 md:grid-cols-2">
+            {(live.orchestration?.hops ?? []).map((hop) => (
+              <li
+                key={hop.id}
+                className={`rounded-2xl border p-4 ${
+                  hop.id === live.orchestration?.currentHop ? "border-copper bg-copper/10" : "border-rule bg-white/70"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{hop.name}</h3>
+                  <Pill tone={hop.id === live.orchestration?.currentHop ? "copper" : "ink"}>{hop.evidence}</Pill>
+                </div>
+                <p className="mt-2 text-sm leading-6">{hop.finding}</p>
+              </li>
+            ))}
+          </ol>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/50 p-4 font-mono text-sm leading-6 text-ink-soft">
+            {live.orchestration?.ascii}
+          </pre>
+          <p className="mt-4 font-serif text-xl text-navy">{live.orchestration?.decision}</p>
           <ol className="mt-4 grid gap-4 md:grid-cols-2">
-            {(plan.orchestration?.agents ?? []).map((agent) => (
+            {(live.orchestration?.agents ?? []).map((agent) => (
               <li key={agent.id} className="rounded-2xl border border-rule bg-white/70 p-4">
                 <h3 className="font-serif text-xl text-navy">{agent.name}</h3>
                 <p className="mt-1 text-sm text-ink-soft">{agent.role}</p>
@@ -920,8 +1013,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                 </div>
                 <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
-                  {item.evidence.map((line) => (
-                    <li key={line.text}>
+                  {item.evidence.map((line, index) => (
+                    <li key={`${item.id}-evidence-${index}`}>
                       {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                     </li>
                   ))}
@@ -1200,8 +1293,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                   {ctx.kind === "user" ? "User Evidence" : ctx.kind === "business" ? "Business Context" : "Technical Context"}
                 </p>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
-                  {ctx.lines.map((line) => (
-                    <li key={line.text}>
+                  {ctx.lines.map((line, index) => (
+                    <li key={`${ctx.kind}-${index}`}>
                       {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                     </li>
                   ))}
@@ -1230,8 +1323,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                 <p className="mt-2 text-sm leading-6">{item.summary}</p>
                 <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
-                  {item.evidence.map((line) => (
-                    <li key={line.text}>
+                  {item.evidence.map((line, index) => (
+                    <li key={`${item.id}-evidence-${index}`}>
                       {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                     </li>
                   ))}
@@ -1287,6 +1380,49 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.decisionLedger?.versionAscii ?? VERSION_ASCII}
           </pre>
+          <p className="mt-6 text-sm leading-6 text-ink-soft">{live.decisionLedger?.versioning?.note ?? VERSIONING_NOTE}</p>
+          <p className="mt-2 font-serif text-xl text-navy">{live.decisionLedger?.versioning?.question ?? VERSION_CURRENT}</p>
+          {(live.decisionLedger?.versioning?.families ?? []).map((family) => (
+            <article key={family.decisionId} className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h3 className="font-serif text-xl text-navy">{family.decisionId}</h3>
+                <Pill tone="sage">{`Current ${family.currentId}`}</Pill>
+              </div>
+              <pre className="mt-3 overflow-x-auto font-mono text-sm leading-6">{family.ascii}</pre>
+              <ol className="mt-4 space-y-3">
+                {family.versions.map((item) => (
+                  <li key={item.id} className={`rounded-2xl border p-4 ${item.status === "current" ? "border-copper bg-copper/10" : "border-rule bg-white"}`}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-3">
+                      <h4 className="font-serif text-lg text-navy">{item.id}</h4>
+                      <Pill tone={item.status === "current" ? "copper" : "ink"}>{item.status}</Pill>
+                    </div>
+                    <p className="mt-2 text-sm leading-6">{item.decision || "The new choice is still unnamed."}</p>
+                    {item.reasons.length ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                        {item.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {item.replacesId ? <p className="mt-2 text-sm leading-6">Replaces {item.replacesId}</p> : null}
+                    {item.replacedById ? <p className="mt-2 text-sm leading-6">Replaced by {item.replacedById}</p> : null}
+                  </li>
+                ))}
+              </ol>
+              {family.changes.length ? (
+                <div className="mt-4">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">What changed between versions</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+                    {family.changes.map((change, index) => (
+                      <li key={`${family.decisionId}-${change.field}-${index}`}>
+                        {change.field === "decision" ? `Decision: ${change.before} → ${change.after}` : `Reason: ${change.after}`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </article>
+          ))}
           <label className="mt-6 block">
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Ask the ledger</span>
             <input
@@ -1310,6 +1446,20 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               onClick={() => setLedgerQuery(STALE_ASSUMPTIONS)}
             >
               Assumptions no longer valid
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setLedgerQuery(VERSION_CURRENT)}
+            >
+              Current version
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setLedgerQuery(VERSION_HISTORY)}
+            >
+              Version history
             </button>
           </div>
           {ledgerQuery && (
@@ -1427,7 +1577,82 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
 
         <section id="reevaluate" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Decision Re-evaluation</h2>
-          <p className="mt-3 text-sm leading-6 text-ink-soft">{REEVAL_NOTE}</p>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{live.decisionReevaluation?.whatChangedNote ?? CHANGED_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.decisionReevaluation?.whatChangedAscii ?? CHANGED_ASCII}
+          </pre>
+          {(live.decisionReevaluation?.cases ?? []).length === 0 ? (
+            <p className="mt-4 text-sm leading-6 text-ink-soft">No recorded decision has new contradicting evidence.</p>
+          ) : (
+            <ol className="mt-6 space-y-6">
+              {(live.decisionReevaluation?.cases ?? [])
+                .filter((item, index, all) => all.findIndex((row) => row.decisionNumber === item.decisionNumber) === index)
+                .map((item) => {
+                const changed = item.whatChanged;
+                return (
+                  <li key={`${item.id}-changed`} className="rounded-2xl border-2 border-navy/20 bg-white/80 p-6">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision Re-evaluation</p>
+                    <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+                      <h3 className="font-serif text-2xl text-navy">Decision: {changed?.title || item.proposal?.originalDecision || `Decision #${item.decisionNumber}`}</h3>
+                      <Pill tone={item.state === "DECISION_CHANGED" ? "stamp" : item.state === "TRIGGERED" || item.state === "UNDER_REVIEW" ? "copper" : "sage"}>
+                        {item.state || REEVAL_LABEL[item.verdict]}
+                      </Pill>
+                    </div>
+                    <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">What Changed?</p>
+                    {(changed?.deltas ?? []).length ? (
+                      <ol className="mt-3 space-y-4">
+                        {changed.deltas.map((row, index) => (
+                          <li key={`${row.metric}-${index}`}>
+                            <p className="text-sm font-medium">{row.metric}</p>
+                            <p className="mt-1 font-mono text-sm leading-6">
+                              {row.before} <span className="text-ink-soft">→</span> {row.after}{" "}
+                              <Pill tone={evidenceTone(row.evidence)}>{row.evidence}</Pill>
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="mt-2 text-sm leading-6 text-ink-soft">No stated before and after was named.</p>
+                    )}
+                    {changed?.assumption && (
+                      <div className="mt-6">
+                        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Affected Assumptions</p>
+                        <p className="mt-2 font-serif text-xl text-navy">
+                          {changed.assumption.id ? `${changed.assumption.id} ` : ""}
+                          {changed.assumption.statement}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-stamp">⚠ {changed.assumption.status || CHANGED_STATUS}</p>
+                      </div>
+                    )}
+                    <div className="mt-6">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Proposed Action</p>
+                      <p className="mt-2 font-serif text-xl text-navy">{changed?.action || item.proposal?.proposedAction}</p>
+                    </div>
+                    {item.status === "pending" && (
+                      <div className="no-print mt-6 flex flex-wrap gap-2">
+                        {(live.decisionReevaluation?.options ?? []).map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={
+                              option.id === "review"
+                                ? "rounded-full bg-navy px-4 py-2 text-sm text-paper"
+                                : "rounded-full border border-rule bg-white px-4 py-2 text-sm"
+                            }
+                            onClick={() => chooseReevaluation(item.id, option.id)}
+                          >
+                            {option.id === "review" ? "Review Decision" : option.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {item.updatedDecision && <p className="mt-4 text-sm leading-6">{item.updatedDecision}</p>}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          <p className="mt-8 text-sm leading-6 text-ink-soft">{REEVAL_NOTE}</p>
           <p className="mt-2 font-serif text-xl text-navy">{live.decisionReevaluation?.question ?? REEVAL_QUESTION}</p>
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.decisionReevaluation?.ascii}
@@ -1435,6 +1660,19 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.decisionReevaluation?.stateAscii ?? STATE_ASCII}
           </pre>
+          <p className="mt-4 text-sm leading-6 text-ink-soft">{live.decisionReevaluation?.scoreNote ?? REEVAL_SCORE_NOTE}</p>
+          <p className="mt-2 font-mono text-sm leading-6">{live.decisionReevaluation?.scoreEquation ?? SCORE_EQUATION}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.decisionReevaluation?.scoreAscii ?? SCORE_ASCII}
+          </pre>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {(live.decisionReevaluation?.priorityBands ?? PRIORITY_BANDS).map((band) => (
+              <article key={band} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{band}</p>
+                <p className="mt-2 text-sm leading-6">{PRIORITY_LABEL[band]}</p>
+              </article>
+            ))}
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(live.decisionReevaluation?.states ?? DECISION_STATES).map((state) => (
               <article key={state} className="rounded-2xl border border-rule bg-white/70 p-4">
@@ -1464,8 +1702,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                 <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{REEVAL_CHANNEL_LABEL[ctx.kind]}</p>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
                   {ctx.lines.length ? (
-                    ctx.lines.map((line) => (
-                      <li key={line.text}>
+                    ctx.lines.map((line, index) => (
+                      <li key={`${ctx.kind}-${index}`}>
                         {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                       </li>
                     ))
@@ -1476,38 +1714,40 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               </article>
             ))}
           </div>
-          {(live.decisionReevaluation?.cases ?? []).length === 0 ? (
-            <p className="mt-4 text-sm leading-6 text-ink-soft">No recorded decision has new contradicting evidence.</p>
-          ) : (
+          {(live.decisionReevaluation?.cases ?? []).length > 0 && (
             <ol className="mt-4 space-y-4">
-              {(live.decisionReevaluation?.cases ?? []).map((item) => (
+              {(live.decisionReevaluation?.cases ?? [])
+                .filter((item, index, all) => all.findIndex((row) => row.decisionNumber === item.decisionNumber) === index)
+                .map((item) => (
                 <li key={item.id} className="rounded-2xl border border-rule bg-white/70 p-4">
-                  <div className="flex flex-wrap items-baseline justify-between gap-3">
-                    <h3 className="font-serif text-xl text-navy">Decision #{item.decisionNumber}</h3>
-                    <Pill tone={item.state === "DECISION_CHANGED" ? "stamp" : item.state === "TRIGGERED" || item.state === "UNDER_REVIEW" ? "copper" : "sage"}>
-                      {item.state || REEVAL_LABEL[item.verdict]}
-                    </Pill>
-                  </div>
+                  <h3 className="font-serif text-xl text-navy">Inspect Decision #{item.decisionNumber}</h3>
                   <p className="mt-2 text-sm leading-6">{item.question}</p>
                   {(item.stateHistory ?? []).length ? (
                     <p className="mt-2 font-mono text-sm leading-6">{(item.stateHistory ?? []).join(" → ")}</p>
                   ) : null}
                   {item.successorId ? <p className="mt-2 text-sm leading-6">Successor {item.successorId}</p> : null}
-                  {item.proposal && (
+                  {item.score && (
                     <article className="mt-4 rounded-2xl border-2 border-navy/20 bg-paper p-5">
-                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision Re-evaluation</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Original Decision</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.originalDecision}</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Trigger</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.trigger}</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Changed Assumption</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.changedAssumption}</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Impact</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.impact}</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Proposed Action</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.proposedAction}</p>
-                      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Confidence</p>
-                      <p className="mt-1 text-sm leading-6">{item.proposal.confidence != null ? item.proposal.confidence.toFixed(2) : "Unnamed"}</p>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Re-evaluation priority</p>
+                      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+                        <p className="font-serif text-2xl text-navy">{item.score.priority != null ? item.score.priority.toFixed(2) : "Unnamed"}</p>
+                        <Pill tone={item.score.band === "critical" || item.score.band === "high" ? "stamp" : item.score.band === "medium" ? "copper" : "sage"}>
+                          {item.score.band ? PRIORITY_LABEL[item.score.band] : "Unnamed"}
+                        </Pill>
+                      </div>
+                      <p className="mt-2 font-mono text-sm leading-6">{item.score.rationale}</p>
+                      <ol className="mt-4 space-y-3">
+                        {item.score.factors.map((factor) => (
+                          <li key={factor.key}>
+                            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">{factor.label}</p>
+                            <p className="mt-1 text-sm leading-6">
+                              {factor.score != null ? factor.score.toFixed(2) : "Unnamed"}{" "}
+                              <Pill tone={evidenceTone(factor.evidence)}>{factor.evidence}</Pill>
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-ink-soft">{factor.reason}</p>
+                          </li>
+                        ))}
+                      </ol>
                     </article>
                   )}
                   {item.trigger ? (
@@ -1522,52 +1762,6 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                   <p className="mt-1 text-sm leading-6">
                     {item.evidence.text} <Pill tone={evidenceTone(item.evidence.evidence)}>{item.evidence.evidence}</Pill>
                   </p>
-                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Observation</p>
-                  <p className="mt-1 text-sm leading-6">{item.observation || "No original observation named."}</p>
-                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Challenging the assumption</p>
-                  <p className="mt-1 text-sm leading-6">{item.assumption}</p>
-                  {item.changed && (
-                    <p className="mt-3 text-sm leading-6 text-stamp">⚠ {item.warning || REEVAL_WARNING}</p>
-                  )}
-                  {item.comparison && (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Original assumption</span>
-                        <br />
-                        {item.comparison.originalAssumption}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Affected assumption</span>
-                        <br />
-                        {item.comparison.affectedAssumptionId || "Unnamed"}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Original</span>
-                        <br />
-                        {item.comparison.original != null ? `${item.comparison.original}%` : "Unnamed"}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Current</span>
-                        <br />
-                        {item.comparison.current != null ? `${item.comparison.current}%` : "Unnamed"}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Change</span>
-                        <br />
-                        {item.comparison.changeLabel}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Impact</span>
-                        <br />
-                        {item.comparison.impact}
-                      </p>
-                      <p className="text-sm leading-6">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Re-evaluation</span>
-                        <br />
-                        {item.comparison.reevaluation}
-                      </p>
-                    </div>
-                  )}
                   {(item.pipeline ?? []).length ? (
                     <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm leading-6">
                       {item.pipeline.map((step) => (
@@ -1578,29 +1772,6 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                       ))}
                     </ol>
                   ) : null}
-                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Impact analysis</p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
-                    {item.affected.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Re-evaluation engine</p>
-                  <p className="mt-1 text-sm leading-6">{item.recommendation}</p>
-                  {item.status === "pending" && (
-                    <div className="no-print mt-4 flex flex-wrap gap-2">
-                      {(live.decisionReevaluation?.options ?? []).map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className="rounded-full bg-navy px-4 py-2 text-sm text-paper"
-                          onClick={() => chooseReevaluation(item.id, option.id)}
-                        >
-                          {option.title}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {item.updatedDecision && <p className="mt-4 text-sm leading-6">{item.updatedDecision}</p>}
                 </li>
               ))}
             </ol>
@@ -1612,6 +1783,9 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           <p className="mt-3 text-sm leading-6 text-ink-soft">{GRAPH_NOTE}</p>
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.productGraph?.ascii}
+          </pre>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productGraph?.lineageAscii ?? LINEAGE_ASCII}
           </pre>
           <label className="mt-6 block">
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Ask the graph</span>
@@ -1651,6 +1825,13 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
             >
               Feedback on decisions
             </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => setGraphQuery(GRAPH_CAUSED)}
+            >
+              What caused this feature
+            </button>
           </div>
           {graphQuery && (
             <article className="mt-4 rounded-2xl border border-rule bg-white/70 p-4">
@@ -1658,6 +1839,15 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
               <p className="mt-2 text-sm leading-6">{graphAnswer.answer}</p>
             </article>
           )}
+          <ol className="mt-4 space-y-4">
+            {(live.productGraph?.lineages ?? []).slice(0, 8).map((lineage) => (
+              <li key={lineage.id} className="rounded-2xl border border-rule bg-white/70 p-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Decision lineage</p>
+                <h3 className="mt-2 font-serif text-xl text-navy">{lineage.feature}</h3>
+                <p className="mt-2 text-sm leading-6">{lineage.causedBy}</p>
+              </li>
+            ))}
+          </ol>
           <ol className="mt-4 space-y-4">
             {paths.slice(0, 8).map((path) => (
               <li key={path.feature.id} className="rounded-2xl border border-rule bg-white/70 p-4">
@@ -1690,8 +1880,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                   {ctx.kind === "products" ? "Products" : ctx.kind === "capacity" ? "Capacity" : "Evidence"}
                 </p>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6">
-                  {ctx.lines.map((line) => (
-                    <li key={line.text}>
+                  {ctx.lines.map((line, index) => (
+                    <li key={`${ctx.kind}-${index}`}>
                       {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                     </li>
                   ))}
@@ -1751,8 +1941,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                 <p className="mt-2 text-sm leading-6">{item.summary}</p>
                 <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Evidence</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6">
-                  {item.evidence.map((line) => (
-                    <li key={line.text}>
+                  {item.evidence.map((line, index) => (
+                    <li key={`${item.id}-evidence-${index}`}>
                       {line.text} <Pill tone={evidenceTone(line.evidence)}>{line.evidence}</Pill>
                     </li>
                   ))}
@@ -1836,8 +2026,8 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
                   <p className="mt-2 text-sm leading-6">{item.change}</p>
                   <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Potential causes</p>
                   <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
-                    {item.causes.map((cause) => (
-                      <li key={cause.text}>
+                    {item.causes.map((cause, index) => (
+                      <li key={`${item.id}-cause-${index}`}>
                         {cause.text} <Pill tone={evidenceTone(cause.evidence)}>{cause.evidence}</Pill>
                       </li>
                     ))}
@@ -1855,7 +2045,30 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
 
         <section id="loop" className="mt-12 scroll-mt-6">
           <h2 className="font-serif text-2xl text-navy">Autonomous Product Loop</h2>
-          <p className="mt-3 text-sm leading-6 text-ink-soft">{LOOP_NOTE}</p>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">{PHASE3_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productLoop?.phase3Ascii}
+          </pre>
+          <p className="mt-4 font-serif text-xl text-navy">
+            Phase 3 now: {PHASE3_NAME[live.productLoop?.currentPhase3 ?? "data"]}
+          </p>
+          <ol className="mt-4 grid gap-3 md:grid-cols-2">
+            {(live.productLoop?.phase3 ?? []).map((item) => (
+              <li
+                key={item.id}
+                className={`rounded-2xl border p-4 ${
+                  item.status === "current" ? "border-copper bg-copper/10" : "border-rule bg-white/70"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{item.name}</h3>
+                  <Pill tone={item.status === "current" ? "copper" : item.status === "done" ? "sage" : "ink"}>{item.status}</Pill>
+                </div>
+                <p className="mt-2 text-sm leading-6">{item.finding}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-6 text-sm leading-6 text-ink-soft">{LOOP_NOTE}</p>
           <p className="mt-2 font-serif text-xl text-navy">{LOOP_QUESTION}</p>
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.productLoop?.engineAscii}
@@ -1863,6 +2076,29 @@ export function PlanDocument({ plan }: { plan: ProductPlan }) {
           <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
             {live.productLoop?.ascii}
           </pre>
+          <p className="mt-6 text-sm leading-6 text-ink-soft">{REEVAL_CYCLE_NOTE}</p>
+          <pre className="mt-4 overflow-x-auto rounded-2xl border border-rule bg-white/80 p-4 font-mono text-sm leading-6">
+            {live.productLoop?.cycleAscii}
+          </pre>
+          <p className="mt-4 font-serif text-xl text-navy">
+            Cycle now: {REEVAL_CYCLE_LABEL[live.productLoop?.currentCycle ?? "observe"]}
+          </p>
+          <ol className="mt-4 grid gap-3 md:grid-cols-2">
+            {(live.productLoop?.cycle ?? []).map((item) => (
+              <li
+                key={item.id}
+                className={`rounded-2xl border p-4 ${
+                  item.status === "current" ? "border-copper bg-copper/10" : "border-rule bg-white/70"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <h3 className="font-serif text-xl text-navy">{item.label}</h3>
+                  <Pill tone={item.status === "current" ? "copper" : item.status === "done" ? "sage" : "ink"}>{item.status}</Pill>
+                </div>
+                <p className="mt-2 text-sm leading-6">{item.text}</p>
+              </li>
+            ))}
+          </ol>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             <article className="rounded-2xl border border-rule bg-white/70 p-4">
               <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">Now</p>
@@ -1963,8 +2199,8 @@ function Tagged({ title, lines }: { title: string; lines: TaggedLine[] }) {
     <>
       <h3 className="mt-6 font-medium">{title}</h3>
       <ul className="mt-2 space-y-2">
-        {lines.map((item) => (
-          <li key={item.text} className="text-sm leading-6">
+        {lines.map((item, index) => (
+          <li key={`${title}-${index}`} className="text-sm leading-6">
             {item.text} <Pill tone={evidenceTone(item.evidence)}>{item.evidence}</Pill>
           </li>
         ))}

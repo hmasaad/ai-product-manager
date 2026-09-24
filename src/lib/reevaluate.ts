@@ -11,15 +11,47 @@ import type {
   ReevaluationComparison,
   ReevaluationImpact,
   ReevaluationOption,
+  ReevaluationPriorityBand,
   ReevaluationProposal,
+  ReevaluationScore,
+  ReevaluationScoreFactor,
   ReevaluationStage,
   ReevaluationTrigger,
   ReevaluationTriggerKind,
   ReevaluationVerdict,
+  WhatChangedAssumption,
+  WhatChangedDelta,
+  WhatChangedView,
 } from "./types";
+import { buildProductLoop } from "./loop";
+import { buildOrchestration } from "./orchestrate";
+import { buildVersioning } from "./versioning";
 
 export const REEVAL_NOTE =
-  "When a trigger fires, the pipeline writes a re-evaluation card and moves the decision from ACTIVE to TRIGGERED. A person still owns Keep Decision, Review, or Change Decision. A change writes a new decision. The old record stays.";
+  "What Changed? is the re-evaluation screen. It names the before and after, the assumption that no longer holds, and the action a person should review. A person still owns Keep Decision, Review, or Change Decision. A change writes a new decision. The old record stays.";
+
+export const CHANGED_NOTE =
+  "What Changed? is the central re-evaluation card. It shows the stated deltas, the affected assumption, and the proposed action. It is not a long model writeup.";
+
+export const CHANGED_ASCII = `Decision
+   │
+   ↓
+What Changed?
+   │
+   ├──── Offline usage
+   ├──── Support requests
+   └──── Customer segment
+   │
+   ↓
+Affected assumption
+   │
+   ↓
+Proposed action
+   │
+   ↓
+Review Decision`;
+
+export const CHANGED_STATUS = "No longer strongly supported";
 
 export const REEVAL_QUESTION =
   "The engine wrote a proposal. Should a person keep the recorded decision, review it, or change it?";
@@ -107,6 +139,43 @@ export const TRIGGER_LABEL: Record<ReevaluationTriggerKind, string> = {
 
 export const REEVAL_WARNING = "Previous assumption may be invalid.";
 
+export const SCORE_NOTE =
+  "Re-evaluation priority is Evidence Change × Decision Impact × Confidence × Business Exposure. Each factor is a 0–1 signal with a reason. Unnamed factors stay unnamed, and the product stays unnamed until every factor is present.";
+
+export const SCORE_ASCII = `Re-evaluation Priority
+         =
+   Evidence Change
+         ×
+   Decision Impact
+         ×
+    Confidence
+         ×
+  Business Exposure`;
+
+export const SCORE_EQUATION = "priority = evidenceChange × decisionImpact × confidence × businessExposure";
+
+export const PRIORITY_BANDS: ReevaluationPriorityBand[] = ["low", "medium", "high", "critical"];
+
+export const PRIORITY_LABEL: Record<ReevaluationPriorityBand, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+export const PRIORITY_THRESHOLDS = [
+  { band: "low" as const, below: 0.2 },
+  { band: "medium" as const, below: 0.4 },
+  { band: "high" as const, below: 0.7 },
+  { band: "critical" as const, below: 1.01 },
+];
+
+export const IMPACT_WEIGHT: Record<ReevaluationImpact, number> = {
+  high: 0.8,
+  medium: 0.5,
+  low: 0.25,
+};
+
 export const OFFLINE_AFFECTED = ["Offline architecture", "Sync strategy", "Data caching", "Product roadmap"];
 
 export const REEVAL_OPTIONS: ReevaluationOption[] = [
@@ -162,6 +231,12 @@ export function emptyDecisionReevaluation(): DecisionReevaluation {
     triggerKinds: TRIGGER_KINDS,
     states: DECISION_STATES,
     stateAscii: STATE_ASCII,
+    scoreNote: SCORE_NOTE,
+    scoreAscii: SCORE_ASCII,
+    scoreEquation: SCORE_EQUATION,
+    priorityBands: PRIORITY_BANDS,
+    whatChangedNote: CHANGED_NOTE,
+    whatChangedAscii: CHANGED_ASCII,
     stages: PIPELINE_STEPS,
     channels: [],
     options: REEVAL_OPTIONS,
@@ -311,14 +386,14 @@ function triggerTouchesAssumption(assumption: string, trigger: string | Reevalua
   const kind = typeof trigger === "string" ? undefined : trigger.kind;
   if (kind === "time" || kind === "business" || kind === "technical" || kind === "dependency") return true;
   if (/offline|connectivity|internet|cell signal/i.test(statement)) {
-    return /offline|connectivity|internet|cell signal|rarely (need|use)|significant user need|usage is low|usually present/i.test(assumption);
+    return /offline|connectivity|internet|cell signal|rarely (need|use)|significant user need|usage is low|usually present|usually available/i.test(assumption);
   }
   return /support request|complaint/i.test(statement) && /support|offline|need/i.test(assumption);
 }
 
 function assumptionChanged(assumption: string, evidence: string, triggers: Array<string | ReevaluationTrigger> = []) {
   if (triggers.some((item) => triggerFired(item, evidence) && triggerTouchesAssumption(assumption, item))) return true;
-  if (/rarely (need|use) offline|not a significant user need|don'?t need offline|offline usage is low|connectivity is usually present|usually have connectivity/i.test(assumption) && /offline usage increased|Current:\s*\d/i.test(evidence)) return true;
+  if (/rarely (need|use) offline|not a significant user need|don'?t need offline|offline usage is low|connectivity is usually (present|available)|usually have connectivity/i.test(assumption) && /offline usage increased|Current:\s*\d/i.test(evidence)) return true;
   if (/without cell signal|full shift/i.test(assumption) && /no longer (holds|valid)|now have continuous|now have reliable/i.test(evidence)) {
     return /cell signal|lte|offline|shift/i.test(evidence);
   }
@@ -412,6 +487,81 @@ function buildComparison(input: {
     changeLabel,
     impact,
     reevaluation: required ? "required" : "not required",
+  };
+}
+
+function parseWhatChangedBlock(source: string): WhatChangedDelta[] {
+  const block =
+    /What changed:\s*\n([\s\S]*?)(?=\n\s*(?:Assumption:|Changed Assumption:|Trigger:|Impact:|Proposed Action:|Decision:|Confidence:|Re-evaluation:|Metric trigger)|$)/i.exec(
+      `${source}\n`,
+    );
+  if (!block?.[1]) return [];
+  const lines = block[1]
+    .split("\n")
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter(Boolean);
+  const deltas: WhatChangedDelta[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const labeled = /^([^:]+):\s*(.+?)\s*(?:→|->|—>|–>)\s*(.+)$/.exec(lines[index]);
+    if (labeled) {
+      deltas.push({ metric: labeled[1].trim(), before: labeled[2].trim(), after: labeled[3].trim(), evidence: "stated" });
+      continue;
+    }
+    const arrow = /^(.*?)\s*(?:→|->|—>|–>)\s*(.+)$/.exec(lines[index]);
+    if (arrow && index > 0 && !/(?:→|->|—>|–>)/.test(lines[index - 1] ?? "")) {
+      deltas.push({
+        metric: lines[index - 1],
+        before: arrow[1].trim(),
+        after: arrow[2].trim(),
+        evidence: "stated",
+      });
+    }
+  }
+  return deltas;
+}
+
+function decisionTitleOf(source: string, decision: string, question: string) {
+  const labeled = labeledLine(source, "Decision title");
+  if (labeled) return labeled;
+  if (/offline report/i.test(`${decision} ${question}`)) return "Offline Reporting";
+  return decision || question || "Recorded decision";
+}
+
+function buildWhatChanged(input: {
+  source: string;
+  decision: string;
+  question: string;
+  comparison: ReevaluationComparison;
+  proposal: ReevaluationProposal;
+  changed: boolean;
+}): WhatChangedView {
+  const stated = parseWhatChangedBlock(input.source);
+  const deltas = stated.length
+    ? stated
+    : input.comparison.original != null && input.comparison.current != null
+      ? [
+          {
+            metric: /offline/i.test(`${input.source} ${input.decision} ${input.proposal.trigger}`)
+              ? "Offline usage"
+              : "Named metric",
+            before: `${input.comparison.original}%`,
+            after: `${input.comparison.current}%`,
+            evidence: "stated" as const,
+          },
+        ]
+      : [];
+  const assumption: WhatChangedAssumption | null = input.proposal.changedAssumption
+    ? {
+        id: input.comparison.affectedAssumptionId,
+        statement: input.proposal.changedAssumption,
+        status: input.changed ? CHANGED_STATUS : "Still supported",
+      }
+    : null;
+  return {
+    title: decisionTitleOf(input.source, input.proposal.originalDecision || input.decision, input.question),
+    deltas,
+    assumption,
+    action: input.proposal.proposedAction,
   };
 }
 
@@ -601,6 +751,10 @@ export function attachDecisionStates(plan: ProductPlan): ProductPlan {
       ...plan.decisionReevaluation,
       states: DECISION_STATES,
       stateAscii: STATE_ASCII,
+      scoreNote: plan.decisionReevaluation.scoreNote ?? SCORE_NOTE,
+      scoreAscii: plan.decisionReevaluation.scoreAscii ?? SCORE_ASCII,
+      scoreEquation: plan.decisionReevaluation.scoreEquation ?? SCORE_EQUATION,
+      priorityBands: plan.decisionReevaluation.priorityBands ?? PRIORITY_BANDS,
       cases,
     },
   };
@@ -613,11 +767,121 @@ function recommendationOf(number: number, verdict: ReevaluationVerdict) {
 }
 
 function proposalConfidence(source: string): number | null {
-  const labeled = labeledLine(source, "Confidence");
-  const match = /^(0(?:\.\d+)?|1(?:\.0+)?)$/.exec(labeled);
-  if (match) return Number(match[1]);
-  const block = /(?:^|\n)\s*Confidence\s*:?\s*\n\s*(0(?:\.\d+)?|1(?:\.0+)?)\b/i.exec(source);
+  return unitScore(source, "Confidence");
+}
+
+function roundScore(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function unitScore(source: string, name: string): number | null {
+  const labeled = labeledLine(source, name);
+  const inline = /^(0(?:\.\d+)?|1(?:\.0+)?)$/.exec(labeled);
+  if (inline) return Number(inline[1]);
+  const block = new RegExp(`(?:^|\\n)\\s*${name}\\s*:?\\s*\\n\\s*(0(?:\\.\\d+)?|1(?:\\.0+)?)\\b`, "i").exec(source);
   return block ? Number(block[1]) : null;
+}
+
+export function classifyPriority(priority: number | null): ReevaluationPriorityBand | null {
+  if (priority == null || Number.isNaN(priority)) return null;
+  if (priority < 0.2) return "low";
+  if (priority < 0.4) return "medium";
+  if (priority < 0.7) return "high";
+  return "critical";
+}
+
+function factorOf(
+  key: ReevaluationScoreFactor["key"],
+  label: string,
+  score: number | null,
+  reason: string,
+  evidence: ReevaluationScoreFactor["evidence"],
+): ReevaluationScoreFactor {
+  return { key, label, score, reason, evidence };
+}
+
+function evidenceChangeFactor(source: string, comparison: ReevaluationComparison): ReevaluationScoreFactor {
+  const stated = unitScore(source, "Evidence change");
+  if (stated != null) {
+    return factorOf("evidenceChange", "Evidence Change", stated, `Stated evidence change ${stated}.`, "stated");
+  }
+  if (comparison.change != null) {
+    const score = roundScore(Math.min(1, Math.abs(comparison.change) / 100));
+    return factorOf(
+      "evidenceChange",
+      "Evidence Change",
+      score,
+      `${comparison.changeLabel || `${comparison.change} percentage points`} maps to ${score}.`,
+      "inferred",
+    );
+  }
+  if (comparison.current != null) {
+    const score = roundScore(Math.min(1, comparison.current / 100));
+    return factorOf("evidenceChange", "Evidence Change", score, `Current ${comparison.current}% maps to ${score}.`, "inferred");
+  }
+  return factorOf("evidenceChange", "Evidence Change", null, "Evidence change is unnamed.", "unknown");
+}
+
+function decisionImpactFactor(source: string, comparison: ReevaluationComparison): ReevaluationScoreFactor {
+  const stated = unitScore(source, "Decision impact");
+  if (stated != null) {
+    return factorOf("decisionImpact", "Decision Impact", stated, `Stated decision impact ${stated}.`, "stated");
+  }
+  const labeled = labeledLine(source, "Impact").toLowerCase();
+  if (/^high|^medium|^low/.test(labeled)) {
+    const score = IMPACT_WEIGHT[comparison.impact];
+    return factorOf(
+      "decisionImpact",
+      "Decision Impact",
+      score,
+      `Stated ${comparison.impact} impact maps to ${score}.`,
+      "stated",
+    );
+  }
+  return factorOf("decisionImpact", "Decision Impact", null, "Decision impact is unnamed.", "unknown");
+}
+
+function confidenceFactor(source: string, confidence: number | null): ReevaluationScoreFactor {
+  if (confidence != null) {
+    return factorOf("confidence", "Confidence", confidence, `Stated confidence ${confidence}.`, "stated");
+  }
+  return factorOf("confidence", "Confidence", null, "Confidence is unnamed.", "unknown");
+}
+
+function businessExposureFactor(source: string): ReevaluationScoreFactor {
+  const stated = unitScore(source, "Business exposure");
+  if (stated != null) {
+    return factorOf("businessExposure", "Business Exposure", stated, `Stated business exposure ${stated}.`, "stated");
+  }
+  return factorOf("businessExposure", "Business Exposure", null, "Business exposure is unnamed.", "unknown");
+}
+
+export function buildReevaluationScore(input: {
+  source: string;
+  comparison: ReevaluationComparison;
+  confidence: number | null;
+}): ReevaluationScore {
+  const factors = [
+    evidenceChangeFactor(input.source, input.comparison),
+    decisionImpactFactor(input.source, input.comparison),
+    confidenceFactor(input.source, input.confidence),
+    businessExposureFactor(input.source),
+  ];
+  const ready = factors.every((item) => item.score != null);
+  const priority = ready ? roundScore(factors.reduce((product, item) => product * (item.score ?? 0), 1)) : null;
+  const band = classifyPriority(priority);
+  const rationale = ready && priority != null
+    ? `${priority.toFixed(2)} = ${factors.map((item) => (item.score ?? 0).toFixed(2)).join(" × ")}`
+    : `${factors.filter((item) => item.score == null).map((item) => item.label).join(", ")} ${factors.filter((item) => item.score == null).length === 1 ? "is" : "are"} unnamed, so priority stays unnamed.`;
+  return {
+    note: SCORE_NOTE,
+    ascii: SCORE_ASCII,
+    equation: SCORE_EQUATION,
+    factors,
+    priority,
+    band,
+    rationale,
+  };
 }
 
 function proposedActionOf(source: string, number: number, verdict: ReevaluationVerdict) {
@@ -694,6 +958,11 @@ function makeCase(input: {
     verdict,
     number: input.number,
   });
+  const score = buildReevaluationScore({
+    source,
+    comparison,
+    confidence: proposal.confidence,
+  });
   return {
     id: `REV-${input.number}-${verdict}`,
     decisionNumber: input.number,
@@ -740,6 +1009,15 @@ function makeCase(input: {
     status: "pending",
     comparison,
     proposal,
+    whatChanged: buildWhatChanged({
+      source,
+      decision: input.decision,
+      question: input.question,
+      comparison,
+      proposal,
+      changed: verdict !== "maintain",
+    }),
+    score,
     state: "TRIGGERED",
     stateHistory: ["ACTIVE", "TRIGGERED"],
     successorId: parseSuccessorId(source, input.number),
@@ -830,6 +1108,12 @@ export function buildDecisionReevaluation(plan: ProductPlan, memory?: ProductMem
     triggerKinds: TRIGGER_KINDS,
     states: DECISION_STATES,
     stateAscii: STATE_ASCII,
+    scoreNote: SCORE_NOTE,
+    scoreAscii: SCORE_ASCII,
+    scoreEquation: SCORE_EQUATION,
+    priorityBands: PRIORITY_BANDS,
+    whatChangedNote: CHANGED_NOTE,
+    whatChangedAscii: CHANGED_ASCII,
     stages: PIPELINE_STEPS,
     channels: channelsOf(evidence),
     options: REEVAL_OPTIONS,
@@ -890,12 +1174,13 @@ export function applyReevaluationChoice(plan: ProductPlan, caseId: string, verdi
       : verdict === "review"
         ? `Decision #${item.decisionNumber} is under review. A person has not replaced it yet.`
         : `Decision #${item.decisionNumber} is reopened. A person authorized the change. The recorded choice on ${original ? labelOf(original) : `DEC-${item.decisionNumber}`} stays. The new record is ${successorId ?? "unnamed"}. The new choice is still unnamed.`;
-  return {
+  const next: ProductPlan = {
     ...plan,
     decisionLedger: {
       ...plan.decisionLedger,
       entries,
       nextNumber,
+      versioning: buildVersioning(entries),
     },
     decisionReevaluation: {
       ...plan.decisionReevaluation,
@@ -919,6 +1204,11 @@ export function applyReevaluationChoice(plan: ProductPlan, caseId: string, verdi
       ),
     },
   };
+  return {
+    ...next,
+    productLoop: buildProductLoop(next),
+    orchestration: buildOrchestration(next),
+  };
 }
 
 export function openReevaluations(plan: ProductPlan) {
@@ -936,7 +1226,22 @@ export function reevaluationMarkdown(plan: ProductPlan) {
   }
   const cases = board.cases
     .map((item) => {
-      return `Decision #${item.decisionNumber}
+      const deltas = (item.whatChanged?.deltas ?? [])
+        .map((row) => `- ${row.metric}: ${row.before} → ${row.after}`)
+        .join("\n");
+      const assumption = item.whatChanged?.assumption
+        ? `${item.whatChanged.assumption.id ? `${item.whatChanged.assumption.id} ` : ""}${item.whatChanged.assumption.statement}\n⚠ ${item.whatChanged.assumption.status}`
+        : item.proposal.changedAssumption;
+      return `Decision: ${item.whatChanged?.title || item.decision || `Decision #${item.decisionNumber}`}
+
+WHAT CHANGED?
+${deltas || "- None named."}
+
+AFFECTED ASSUMPTIONS
+${assumption}
+
+PROPOSED ACTION
+${item.whatChanged?.action || item.proposal.proposedAction}
 
 Question: ${item.question}
 Decision: ${item.decision || "Recorded."}
@@ -956,6 +1261,11 @@ Impact: ${item.proposal.impact}
 Proposed action: ${item.proposal.proposedAction}
 Confidence: ${item.proposal.confidence ?? "unnamed"}
 
+Re-evaluation priority: ${item.score?.priority ?? "unnamed"}
+Band: ${item.score?.band ?? "unnamed"}
+${item.score?.rationale ?? ""}
+${(item.score?.factors ?? []).map((factor) => `${factor.label}: ${factor.score ?? "unnamed"} — ${factor.reason}`).join("\n")}
+
 State: ${(item.stateHistory ?? [item.state]).join(" → ")}
 ${item.successorId ? `Successor: ${item.successorId}` : ""}
 
@@ -969,6 +1279,12 @@ ${board.question}
 
 \`\`\`
 ${board.ascii}
+\`\`\`
+
+${board.scoreNote ?? SCORE_NOTE}
+
+\`\`\`
+${board.scoreAscii ?? SCORE_ASCII}
 \`\`\`
 
 ${channels}

@@ -26,8 +26,11 @@ import {
   TRIGGERS_BRIEF,
   PIPELINE_BRIEF,
   HUMAN_OWNER_BRIEF,
+  SCORE_BRIEF,
+  CHANGED_BRIEF,
   STATES_BRIEF,
   VERSION_BRIEF,
+  LINEAGE_BRIEF,
   OFFLINE_REEVAL_BRIEF,
   STRATEGY_BET_BRIEF,
   ROADMAP_BRIEF,
@@ -370,6 +373,50 @@ export default function HomePage() {
               type="button"
               className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
               onClick={() => {
+                setBrief(SCORE_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Re-eval score
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(CHANGED_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              What changed
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(CHANGED_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Connected agents
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(CHANGED_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Phase 3 loop
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
                 setBrief(STATES_BRIEF);
                 setExisting("");
                 setConstraints("");
@@ -386,7 +433,18 @@ export default function HomePage() {
                 setConstraints("");
               }}
             >
-              Decision versions
+              Decision versioning
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(LINEAGE_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Decision lineage
             </button>
             <button
               type="button"

@@ -267,7 +267,7 @@ export function buildRecommendations(plan: ProductPlan, memory?: ProductMemory):
         feature: plan.features.find((item) => /validate/i.test(item.name)),
         plan,
         volume,
-        evidence: [fact(plan.problem.statement, plan.research[0]?.evidence ?? "stated")],
+        evidence: [fact("The source names a problem and no mechanism.", plan.research[0]?.evidence ?? "stated")],
       }),
     ];
   }

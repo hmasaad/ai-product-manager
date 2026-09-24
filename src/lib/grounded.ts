@@ -11,12 +11,83 @@ import type {
   Requirement,
 } from "./types";
 
-const SITUATIONS: { test: RegExp; roles: string[] }[] = [
-  { test: /\bclinic\b|\bappointment\b/i, roles: ["Patient", "Front desk"] },
-  { test: /\bchildcare\b|\bdaycare\b/i, roles: ["Parent"] },
-  { test: /\bschool\b|\bclassroom\b/i, roles: ["Teacher"] },
-  { test: /\binvoice\b|\bbilling\b|\bpayment\b/i, roles: ["Account holder", "Support"] },
-  { test: /\bwarehouse\b|\bpick list\b/i, roles: ["Picker", "Supervisor"] },
+const SITUATIONS: {
+  test: RegExp;
+  people: { role: string; context: string; jobs: string[]; pain: string }[];
+}[] = [
+  {
+    test: /\bclinic\b|\bappointment\b/i,
+    people: [
+      {
+        role: "Patient",
+        context: "Trying to book a same-day appointment by phone.",
+        jobs: ["Get a same-day appointment"],
+        pain: "The line is a race from 7 to 8am.",
+      },
+      {
+        role: "Front desk",
+        context: "Answers the rush of same-day booking calls.",
+        jobs: ["Take the next call and book what is left"],
+        pain: "The phones lock up from 7 to 8am.",
+      },
+    ],
+  },
+  {
+    test: /\bchildcare\b|\bdaycare\b/i,
+    people: [
+      {
+        role: "Parent",
+        context: "Needs a place for a child during the working day.",
+        jobs: ["Confirm the child is cared for today"],
+        pain: "The source names the situation and not the workaround.",
+      },
+    ],
+  },
+  {
+    test: /\bschool\b|\bclassroom\b/i,
+    people: [
+      {
+        role: "Teacher",
+        context: "Runs the classroom named in the source.",
+        jobs: ["Get through the named classroom job"],
+        pain: "The source names the situation and not the workaround.",
+      },
+    ],
+  },
+  {
+    test: /\binvoice\b|\bbilling\b|\bpayment\b/i,
+    people: [
+      {
+        role: "Account holder",
+        context: "Pays an invoice on the current portal.",
+        jobs: ["See the amount due", "Finish a payment"],
+        pain: "A failed or unclear payment leaves the amount still due.",
+      },
+      {
+        role: "Support",
+        context: "Takes the volume from people who cannot finish payment.",
+        jobs: ["Explain why a card failed"],
+        pain: "The same payment failures keep coming back.",
+      },
+    ],
+  },
+  {
+    test: /\bwarehouse\b|\bpick list\b/i,
+    people: [
+      {
+        role: "Picker",
+        context: "Works from a pick list on the floor.",
+        jobs: ["Finish the named pick"],
+        pain: "The source names the floor job and not the workaround.",
+      },
+      {
+        role: "Supervisor",
+        context: "Owns whether the pick list closed.",
+        jobs: ["See whether the pick finished"],
+        pain: "The source names the floor job and not the workaround.",
+      },
+    ],
+  },
 ];
 
 export function composeSource(input: ProductInput) {
@@ -67,16 +138,28 @@ function personasFromUsers(bullets: string[], problem: string, success: string):
 
 function personasFromSituation(source: string, problem: string): Persona[] {
   const match = SITUATIONS.find((item) => item.test.test(source));
-  const roles = match?.roles ?? ["Primary user"];
-  return roles.map((role) => ({
-    name: role,
-    role,
-    context: clip(problem, 220),
-    jobs: ["Get to the outcome without the current workaround."],
-    pains: [clip(problem, 180)],
-    success: "The team can describe this person's job with evidence, not a guess.",
-    evidence: match ? "inferred" : "inferred",
-  }));
+  if (match) {
+    return match.people.map((person) => ({
+      name: person.role,
+      role: person.role,
+      context: person.context,
+      jobs: person.jobs,
+      pains: [person.pain],
+      success: "The team can describe this person's job with evidence, not a guess.",
+      evidence: "inferred" as const,
+    }));
+  }
+  return [
+    {
+      name: "Primary user",
+      role: "Primary user",
+      context: "The source does not name this person. Treat the role as a hypothesis.",
+      jobs: ["Show what they do today when this happens."],
+      pains: [clip(problem.split(/[.\n]/)[0] ?? problem, 120)],
+      success: "The team can describe this person's job with evidence, not a guess.",
+      evidence: "inferred",
+    },
+  ];
 }
 
 function personaFor(statement: string, personas: Persona[]) {
@@ -141,11 +224,14 @@ function scopedRequirements(
 }
 
 function workaroundSentence(text: string) {
+  const because = text.split(/\bbecause\b/i)[1]?.trim();
+  if (because) return because.replace(/\.$/, "") + ".";
   const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
   const found = sentences.find((sentence) =>
     /currently|today|right now|paper|phone|call|spreadsheet|manually|personal phones/i.test(sentence),
   );
-  return found ?? "The source does not describe the workaround beyond the problem itself.";
+  if (found && found.replace(/\s+/g, " ").trim() !== text.replace(/\s+/g, " ").trim()) return found;
+  return "The source does not describe the workaround beyond the problem itself.";
 }
 
 function costSentence(text: string) {
@@ -153,6 +239,9 @@ function costSentence(text: string) {
   const found = [...sentences].reverse().find((sentence) =>
     /miss|late|lost|fail|lock|error|cannot|can't|never|zero|drop/i.test(sentence),
   );
+  if (found && found.replace(/\s+/g, " ").trim() === text.replace(/\s+/g, " ").trim()) {
+    return "Waiting leaves the same situation in place.";
+  }
   return found ?? clip(text, 180);
 }
 
@@ -392,7 +481,7 @@ export function buildJudgment(input: ProductInput): Judgment {
       {
         id: "R1",
         priority: "must",
-        statement: `Deliver this outcome, without locking a mechanism yet: ${clip(problemText, 200)}`,
+        statement: "Watch the named people through one occurrence of this problem and write down the workaround.",
         rationale: "The source states the pain and does not state the product.",
         persona: personas[0]?.role ?? "Primary user",
         evidence: "inferred",

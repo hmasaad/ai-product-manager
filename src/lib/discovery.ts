@@ -1,5 +1,6 @@
 import { FIELD_COPY, FIELD_LEAVES } from "./field-management";
 import { PROPOSED_FEATURES } from "./roadmap";
+import { clip, singularRole } from "./text";
 import type {
   AnalyticsEvent,
   Competitor,
@@ -12,13 +13,15 @@ import type {
   TaggedLine,
 } from "./types";
 
+type DomainUser = { role: string; why: string; jobs: string[]; pain?: string };
+
 type Domain = {
   title: string;
   test: RegExp;
   problem: string;
   workaround: string;
   cost: string;
-  users: { role: string; why: string; jobs: string[] }[];
+  users: DomainUser[];
   problems: string[];
   needs: { user: string; need: string }[];
   goals: string[];
@@ -49,11 +52,13 @@ const FIELD_LOG: Domain = {
       role: "Farm operator",
       why: "Owns the season and needs to know what happened on each field.",
       jobs: ["Name the fields on a farm", "Read one field's activities"],
+      pain: "The season's work cannot be found by field.",
     },
     {
       role: "Field crew",
       why: "Does the work, and is the person who still knows what just happened.",
       jobs: ["Log a field activity before leaving the field"],
+      pain: "What just happened lives in memory until someone writes it down.",
     },
   ],
   problems: [
@@ -239,15 +244,134 @@ const CAPACITY_PLAN: Domain = {
 
 const DOMAINS = [CAPACITY_PLAN, FIELD_MANAGEMENT, FIELD_LOG];
 
-function buildIntent(text: string) {
-  const match =
-    /(?:build|create|make)\s+(?:an?\s+)?(?:app|product|platform|tool)\s+for\s+([a-z][^.\n]{1,40}?)(?:\s+to\s+([a-z][^.\n]{2,80}))?/i.exec(
-      text.replace(/\s+/g, " ").trim(),
+type Intent = {
+  users: string;
+  role: string;
+  job: string;
+  product: string;
+  title: string;
+};
+
+function collapse(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function cleanPhrase(text: string) {
+  return collapse(text)
+    .replace(/^(?:an?\s+|the\s+)/i, "")
+    .replace(/[.?!]+$/g, "");
+}
+
+function titleCase(text: string) {
+  return cleanPhrase(text)
+    .split(" ")
+    .map((word, index) => {
+      if (index > 0 && /^(and|or|for|of|the|a|an|in|at|from|across)$/i.test(word)) return word.toLowerCase();
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
+function productOf(line: string) {
+  const beforeFor =
+    /((?:[a-z]+(?:\s+[a-z]+){0,3})?\s*(?:app|product|platform|tool|service|marketplace|business|saas))\s+for\b/i.exec(
+      line,
     );
-  if (!match) return null;
+  return cleanPhrase(
+    cleanPhrase(beforeFor?.[1] ?? "").replace(/^(start|build|create|launch|design|want|make)\s+/i, ""),
+  );
+}
+
+function roleHead(users: string) {
+  return cleanPhrase(users.split(/\s+(?:in|at|from|across)\s+/)[0] ?? users);
+}
+
+function namedObject(job: string, product: string) {
+  const hit =
+    /\b(fields?|orders?|lessons?|appointments?|deliveries|activities|reports?|invoices?|items?|records?)\b/i.exec(
+      `${job} ${product}`,
+    );
+  if (hit?.[1]) {
+    const word = hit[1].toLowerCase();
+    if (word.endsWith("ies")) return word;
+    if (word.endsWith("s")) return word;
+    return `${word}s`;
+  }
+  return "records";
+}
+
+function titleFromIntent(intent: Omit<Intent, "title" | "role">) {
+  const users = roleHead(intent.users);
+  const product = cleanPhrase(intent.product.replace(/\s+(app|platform|tool|service|business|saas)$/i, "")).replace(
+    /^(app|product|platform|tool|service|business|saas)$/i,
+    "",
+  );
+  if (product) return `${titleCase(product)} for ${users}`;
+  if (intent.job && !/job named in the request/i.test(intent.job)) {
+    const head = cleanPhrase(intent.job.split(/\s+and\s+/)[0] ?? intent.job);
+    return `${titleCase(head)} for ${users}`;
+  }
+  return `App for ${users}`;
+}
+
+function buildIntent(text: string): Intent | null {
+  const source = collapse(text).replace(/[.?!]+$/g, "");
+  if (!source) return null;
+  if (/^(users?|the (?:team|system)|staff)\s+(can|should|must|will)\b/i.test(source)) return null;
+
+  const ideaLine = /(?:business idea|idea)\s*:\s*(.+)/i.exec(source)?.[1] ?? source;
+  const asksForProduct =
+    /(?:business idea|idea)\s*:/i.test(source) ||
+    /\b((?:we|i)\s+want|let'?s)\b/i.test(ideaLine) ||
+    /\b(app|platform|tool|service|marketplace|saas)\s+for\b/i.test(ideaLine) ||
+    /\b(?:build|create|start|launch|design)\s+(?:an?\s+)?(?:app|product|platform|tool|service|marketplace|saas|business)\b/i.test(
+      ideaLine,
+    ) ||
+    /\bmake\s+(?:an?\s+)?(?:app|product|platform|tool|service|marketplace)\b/i.test(ideaLine);
+  if (!asksForProduct) return null;
+
+  const forTo =
+    /(?:app|product|platform|tool|service|marketplace|business|saas)\s+for\s+(.+?)\s+to\s+(.+)/i.exec(ideaLine) ??
+    /\bfor\s+(.+?)\s+to\s+(.+)/i.exec(ideaLine);
+  const forOnly = /(?:app|product|platform|tool|service|marketplace|business|saas)\s+for\s+(.+)/i.exec(ideaLine);
+
+  let users = "";
+  let job = "";
+  let product = productOf(ideaLine);
+
+  if (forTo) {
+    users = cleanPhrase(forTo[1]);
+    job = cleanPhrase(forTo[2]);
+  } else if (forOnly) {
+    users = cleanPhrase(forOnly[1]);
+  }
+
+  if (!job && product && !/^(app|product|platform|tool|business|saas)$/i.test(product)) {
+    job = `use the ${cleanPhrase(product)}`;
+  }
+
+  if (!users) {
+    const built =
+      /(?:build|create|start|launch|design)\s+(?:an?\s+)?(?:app|product|platform|tool|service|marketplace|saas|business)(?:\s+for\s+(.+))?/i.exec(
+        ideaLine,
+      );
+    if (built?.[1]) {
+      const rest = cleanPhrase(built[1]);
+      const leading = /^(farmers?|operators?|inspectors?|tutors?|teachers?|parents?|patients?)\b/i.exec(rest);
+      users = leading?.[1] ?? rest.split(/\s+to\s+/)[0] ?? "the people named in the request";
+      job = job || cleanPhrase(rest.split(/\s+to\s+/)[1] ?? rest);
+      product = product || rest;
+    }
+  }
+
+  if (!users && !job) return null;
+  users = users || "the people named in the request";
+  job = job || "do the job named in the request";
+  const draft = { users, job, product };
   return {
-    users: match[1].trim(),
-    job: match[2]?.trim() || "do the job named in the request",
+    ...draft,
+    role: singularRole(titleCase(roleHead(users))),
+    title: titleFromIntent(draft),
   };
 }
 
@@ -255,16 +379,22 @@ function line(text: string, evidence: Evidence): TaggedLine {
   return { text, evidence };
 }
 
-function persona(role: string, why: string, jobs: string[], problem: string, success: string): Persona {
+function persona(role: string, why: string, jobs: string[], pain: string, success: string): Persona {
   return {
     name: role,
     role,
     context: why,
     jobs,
-    pains: [problem],
+    pains: [pain],
     success,
     evidence: "inferred",
   };
+}
+
+function painFor(person: DomainUser, job: string, index: number) {
+  if (person.pain) return person.pain;
+  if (index === 0) return `${person.role} has no shared record of ${job}.`;
+  return `${person.role} cannot see whether that job was done.`;
 }
 
 export function enrichSketch(input: ProductInput, judgment: Judgment): {
@@ -274,24 +404,38 @@ export function enrichSketch(input: ProductInput, judgment: Judgment): {
 } {
   if (judgment.maturity !== "problem") return { judgment, proposed: false, domain: null };
   const source = `${input.brief}\n${input.existing}`.trim();
-  const intent = buildIntent(source);
+  const intent = buildIntent(input.brief);
   const domain = DOMAINS.find((item) => item.test.test(source)) ?? null;
   if (!intent && !domain) return { judgment, proposed: false, domain: null };
 
   const pack = domain;
   const users = intent?.users ?? "the people named in the request";
   const job = intent?.job ?? "the job named in the request";
-  const problem = pack?.problem ?? `${users} need a way to ${job}. The request names the product and not the workaround.`;
+  const role = intent?.role ?? singularRole(titleCase(roleHead(users)));
+  const object = namedObject(job, intent?.product ?? "");
+  const problem =
+    pack?.problem ??
+    `${titleCase(users)} have no shared record of ${job.replace(/^use the\s+/i, "")}. The request names the product, not the workaround.`;
   const metrics = pack?.metrics ?? [
-    `Share of "${job}" records created the same day.`,
+    `Share of ${job} records created the same day.`,
     `Time to find that record again.`,
   ];
+  const people: DomainUser[] = pack?.users ?? [
+    {
+      role,
+      why: `Named in the request as the person this ${intent?.product || "product"} is for.`.replace("this a ", "this "),
+      jobs: [job],
+    },
+    {
+      role: "Operator",
+      why: "Named the request and would own the first slice.",
+      jobs: [`Name the ${object} the job is about`, `Read those ${object} later`],
+    },
+  ].filter((person, index, all) => all.findIndex((item) => item.role.toLowerCase() === person.role.toLowerCase()) === index);
   const mvp = pack?.mvp ?? [
-    { statement: `${users} can ${job}`, persona: users },
-    { statement: "The record of that job can be found again later", persona: users },
-  ];
-  const people = pack?.users ?? [
-    { role: users, why: `Named in the request as the person the app is for.`, jobs: [job] },
+    { statement: `Name the ${object} this job is about`, persona: people[1]?.role ?? "Operator" },
+    { statement: `${titleCase(users)} can ${job}`, persona: role },
+    { statement: `Find a past ${object.replace(/s$/, "")} again later`, persona: role },
   ];
 
   const requirements = [
@@ -308,7 +452,7 @@ export function enrichSketch(input: ProductInput, judgment: Judgment): {
       priority: "later" as const,
       statement: item,
       rationale: "Held out of the proposed MVP.",
-      persona: people[0]?.role ?? users,
+      persona: people[0]?.role ?? role,
       evidence: "inferred" as const,
     })),
   ];
@@ -318,7 +462,7 @@ export function enrichSketch(input: ProductInput, judgment: Judgment): {
     domain: pack,
     judgment: {
       ...judgment,
-      title: pack?.title ?? `App for ${users}`,
+      title: pack?.title ?? intent?.title ?? `App for ${role}`,
       maturity: "solution",
       problem: {
         statement: problem,
@@ -329,11 +473,13 @@ export function enrichSketch(input: ProductInput, judgment: Judgment): {
         nonGoals: pack?.future ?? ["Scope beyond the job named in the request."],
         openQuestions: pack?.questions ?? [
           `Who besides ${users} has to use this?`,
-          "What do they use today?",
+          `What do they use today instead of ${intent?.product || "this product"}?`,
           "What number should move in the first month?",
         ],
       },
-      personas: people.map((item) => persona(item.role, item.why, item.jobs, problem, metrics[0] ?? "")),
+      personas: people.map((item, index) =>
+        persona(item.role, item.why, item.jobs, painFor(item, job, index), metrics[0] ?? ""),
+      ),
       requirements,
       constraints: pack?.constraints ?? ["No constraint was stated with the request."],
       assumptions: [
@@ -344,9 +490,9 @@ export function enrichSketch(input: ProductInput, judgment: Judgment): {
       research: [
         {
           topic: "The request",
-          finding: source.replace(/\s+/g, " ").trim(),
+          finding: clip(collapse(source), 220),
           evidence: "stated",
-          implication: "The MVP below is a proposal read from that sentence.",
+          implication: "The MVP below is a proposal read from that sentence. Other sections write their own job.",
         },
         ...judgment.research.filter((item) => item.evidence === "unknown").slice(0, 3),
       ],
@@ -384,6 +530,20 @@ function competitorsFor(source: string, domain: Domain | null): Competitor[] {
   ];
 }
 
+function genericFlows(judgment: Judgment): Flow[] {
+  const job = judgment.requirements.find((item) => item.priority === "must")?.statement ?? "the named job";
+  return [
+    {
+      name: "Do the job",
+      steps: ["Open the workspace", "Pick the record", `Complete: ${job}`, "Save", "See the record"],
+    },
+    {
+      name: "Find a record",
+      steps: ["Open the workspace", "Pick the record", "Read the history"],
+    },
+  ];
+}
+
 export function buildDiscovery(input: {
   judgment: Judgment;
   proposed: boolean;
@@ -403,10 +563,15 @@ export function buildDiscovery(input: {
       );
   const problems = domain
     ? domain.problems.map((text) => line(text, "inferred"))
-    : [line(judgment.problem.statement, judgment.problem.statement ? "stated" : "unknown")];
+    : [
+        line(judgment.problem.statement, input.proposed ? "inferred" : judgment.problem.statement ? "stated" : "unknown"),
+        ...(input.proposed
+          ? [line("What they use today was not named. Ask before copying an incumbent.", "unknown")]
+          : []),
+      ];
   const goals = domain
     ? domain.goals.map((text) => line(text, "inferred"))
-    : judgment.problem.success.map((text) => line(text, "stated"));
+    : judgment.problem.success.map((text) => line(text, input.proposed ? "inferred" : "stated"));
   const metrics = judgment.problem.success.length
     ? judgment.problem.success.map((text) => line(text, input.proposed ? "inferred" : "stated"))
     : [line("No success measure was stated. Ask which number should move.", "unknown")];
@@ -429,7 +594,7 @@ export function buildDiscovery(input: {
     successMetrics: metrics,
     mvpDefinition: mvp.length ? mvp : [line("No MVP was stated. Validate the problem before naming scope.", "unknown")],
     questions: judgment.problem.openQuestions,
-    flows: domain?.flows ?? [],
+    flows: domain?.flows ?? (input.proposed ? genericFlows(judgment) : []),
     edgeCases: (domain?.edgeCases ?? judgment.problem.openQuestions).map((text) =>
       line(text, domain ? "inferred" : "unknown"),
     ),
