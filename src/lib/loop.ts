@@ -223,7 +223,7 @@ function textOf(plan: ProductPlan, id: LoopStageId): { text: string; evidence: E
       evidence: decline || change ? "stated" : "unknown",
     };
   }
-  const review = plan.decisionReevaluation?.cases.find((item) => item.verdict === "review");
+  const review = plan.decisionReevaluation?.cases.find((item) => item.verdict === "review" || item.verdict === "reconsider");
   return {
     text: review ? review.recommendation : "Learnings land on the ledger and in product memory.",
     evidence: review ? review.evidence.evidence : "inferred",

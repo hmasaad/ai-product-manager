@@ -566,27 +566,82 @@ export type LedgerOption = {
   title: string;
 };
 
-export type LedgerAssumption = {
+export type LedgerLifecycle = "open" | "active" | "superseded";
+export type DecisionState =
+  | "ACTIVE"
+  | "TRIGGERED"
+  | "UNDER_REVIEW"
+  | "VALIDATED"
+  | "DECISION_CHANGED"
+  | "DECISION_RETAINED";
+export type LedgerEvidenceType = "analytics" | "feedback" | "constraint" | "stated";
+export type LedgerLayerConfidence = "high" | "medium" | "low";
+export type ReevaluationTriggerKind = "metric" | "feedback" | "business" | "technical" | "time" | "dependency";
+
+export type ReevaluationTrigger = {
+  id: string;
+  kind: ReevaluationTriggerKind;
+  statement: string;
+  metric?: string;
+  operator?: ">" | ">=" | "<" | "<=" | "=";
+  threshold?: number;
+  unit?: string;
+  days?: number;
+};
+
+export type LedgerObservation = {
+  id: string;
+  statement: string;
   text: string;
+  type: LedgerEvidenceType;
+  metric?: string;
+  value?: number | string;
+  evidence: Evidence;
+};
+
+export type LedgerAssumption = {
+  id: string;
+  statement: string;
+  text: string;
+  confidence: number | null;
   health: AssumptionHealth;
   note?: string;
 };
 
+export type LedgerEvidenceItem = DecisionFact & {
+  type: LedgerEvidenceType;
+  metric?: string;
+  value?: number | string;
+};
+
 export type LedgerEntry = {
+  decisionId: string;
   number: number;
   id: string;
   kind: LedgerKind;
   question: string;
   options: LedgerOption[];
-  evidence: DecisionFact[];
+  evidence: LedgerEvidenceItem[];
+  observations: LedgerObservation[];
   constraints: string[];
   risks: string[];
   assumptions: LedgerAssumption[];
+  reviewTriggers: string[];
+  triggers: ReevaluationTrigger[];
   decision: string;
+  decisionConfidence: LedgerLayerConfidence | null;
   reason: string;
   owner: string;
   date: string;
   status: "open" | "recorded";
+  lifecycle: LedgerLifecycle;
+  state?: DecisionState;
+  stateHistory?: DecisionState[];
+  predecessorId?: string;
+  successorId?: string;
+  version?: number;
+  replacesId?: string;
+  replacedById?: string;
 };
 
 export type LedgerAnswer = {
@@ -599,28 +654,95 @@ export type LedgerAnswer = {
 export type DecisionLedger = {
   note: string;
   ascii: string;
+  versionAscii: string;
   entries: LedgerEntry[];
   nextNumber: number;
 };
 
-export type ReevaluationVerdict = "hold" | "review";
+export type ReevaluationVerdict = "maintain" | "review" | "reconsider";
+export type ReevaluationChannel = "analytics" | "feedback" | "constraints";
+export type ReevaluationStatus = "pending" | "chosen";
+export type ReevaluationImpact = "high" | "medium" | "low";
+export type ReevaluationStageId =
+  | "trigger"
+  | "decision"
+  | "evidence"
+  | "assumptions"
+  | "collect"
+  | "compare"
+  | "changed"
+  | "impact"
+  | "generate";
+
+export type ReevaluationStage = {
+  id: ReevaluationStageId;
+  label: string;
+  text: string;
+};
+
+export type ReevaluationComparison = {
+  originalAssumption: string;
+  affectedAssumptionId: string;
+  original: number | null;
+  current: number | null;
+  change: number | null;
+  changeLabel: string;
+  impact: ReevaluationImpact;
+  reevaluation: "required" | "not required";
+};
+
+export type ReevaluationOption = {
+  id: ReevaluationVerdict;
+  title: string;
+  summary: string;
+};
+
+export type ReevaluationProposal = {
+  originalDecision: string;
+  trigger: string;
+  changedAssumption: string;
+  impact: ReevaluationImpact;
+  proposedAction: string;
+  confidence: number | null;
+};
 
 export type ReevaluationCase = {
+  id: string;
   decisionNumber: number;
   question: string;
   decision: string;
   assumption: string;
+  observation: string;
+  target: "assumption";
+  trigger?: ReevaluationTrigger;
   evidence: DecisionFact;
+  channel: ReevaluationChannel;
   changed: boolean;
   warning: string;
   affected: string[];
   recommendation: string;
   verdict: ReevaluationVerdict;
+  status: ReevaluationStatus;
+  comparison: ReevaluationComparison;
+  pipeline: ReevaluationStage[];
+  proposal: ReevaluationProposal;
+  state: DecisionState;
+  stateHistory: DecisionState[];
+  successorId?: string;
+  updatedDecision?: string;
 };
 
 export type DecisionReevaluation = {
   note: string;
   ascii: string;
+  question: string;
+  owner: "human";
+  triggerKinds: ReevaluationTriggerKind[];
+  stages: ReevaluationStage[];
+  states: DecisionState[];
+  stateAscii: string;
+  channels: { kind: ReevaluationChannel; lines: DecisionFact[] }[];
+  options: ReevaluationOption[];
   cases: ReevaluationCase[];
 };
 

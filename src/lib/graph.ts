@@ -380,7 +380,7 @@ function feedback(plan: ProductPlan, graph: ProductGraph, corpus: string): Graph
       (/cityworks|offline|packet|inspection/i.test(item.label) && /packet|offline|inspector/i.test(blob))
     );
   });
-  const reviews = (plan.decisionReevaluation?.cases ?? []).filter((item) => item.verdict === "review");
+  const reviews = (plan.decisionReevaluation?.cases ?? []).filter((item) => item.verdict === "review" || item.verdict === "reconsider");
   for (const item of reviews) {
     const node = graph.nodes.find((row) => row.kind === "decision" && row.ref === String(item.decisionNumber));
     if (node && !nodes.some((row) => row.id === node.id)) nodes.push(node);

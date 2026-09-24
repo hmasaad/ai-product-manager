@@ -363,6 +363,32 @@ export function buildApprovals(plan: ProductPlan): ApprovalBoard {
   };
 }
 
+export function attachReevaluationGates(plan: ProductPlan): ApprovalBoard {
+  const open = (plan.decisionReevaluation?.cases ?? []).filter(
+    (item) => (item.verdict === "review" || item.verdict === "reconsider") && item.status === "pending",
+  );
+  if (!open.length) return plan.approvals;
+  const first = open[0];
+  if (plan.approvals.gates.some((item) => /review decision #|reconsider decision #/i.test(item.proposal))) {
+    return plan.approvals;
+  }
+  const extra: ApprovalGate = {
+    id: `GATE-reeval-${first.decisionNumber}`,
+    kind: first.verdict === "reconsider" ? "strategy" : "priority",
+    proposal: first.recommendation,
+    evidence: [first.assumption, first.evidence.text].filter(Boolean),
+    risk: first.warning || "A recorded decision may no longer match the evidence.",
+    status: "pending",
+    authorization: first.verdict === "reconsider" ? "mandatory" : "review",
+    commit: commitText("pending"),
+    evidenceTag: first.evidence.evidence,
+  };
+  return {
+    ...plan.approvals,
+    gates: [...plan.approvals.gates, extra],
+  };
+}
+
 export function applyGateDecision(plan: ProductPlan, gateId: string, status: "approved" | "rejected"): ProductPlan {
   return {
     ...plan,

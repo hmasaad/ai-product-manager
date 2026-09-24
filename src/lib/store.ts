@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { structureEntry } from "./ledger";
 import { emptyMemory } from "./memory";
-import type { ProductMemory, ProductPlan } from "./types";
+import type { LedgerEntry, ProductMemory, ProductPlan } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "latest.json");
 const MEMORY = path.join(process.cwd(), "data", "memory.json");
@@ -34,7 +35,7 @@ export async function loadMemory(): Promise<ProductMemory> {
       ...emptyMemory(),
       ...parsed,
       products: parsed.products ?? (parsed.product ? [parsed.product] : []),
-      ledger: parsed.ledger ?? [],
+      ledger: (parsed.ledger ?? []).map((item) => structureEntry(item as LedgerEntry)),
       nextDecisionNumber: parsed.nextDecisionNumber ?? 1,
     };
   } catch {

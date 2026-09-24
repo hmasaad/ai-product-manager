@@ -66,7 +66,7 @@ function add(
 
 function rememberReviews(items: MemoryItem[], plan: ProductPlan, source: string, at: string) {
   for (const item of plan.decisionReevaluation?.cases ?? []) {
-    if (item.verdict !== "review") continue;
+    if (item.verdict !== "review" && item.verdict !== "reconsider") continue;
     add(
       items,
       "decision",
@@ -80,7 +80,7 @@ function rememberReviews(items: MemoryItem[], plan: ProductPlan, source: string,
 export function rememberPlan(memory: ProductMemory, plan: ProductPlan): ProductMemory {
   if (plan.maturity === "problem") {
     const recorded = (plan.decisionLedger?.entries ?? []).filter((item) => item.status === "recorded" && item.number > 0);
-    const reviews = (plan.decisionReevaluation?.cases ?? []).filter((item) => item.verdict === "review");
+    const reviews = (plan.decisionReevaluation?.cases ?? []).filter((item) => item.verdict === "review" || item.verdict === "reconsider");
     const monitors = plan.monitoring?.signals ?? [];
     if (!recorded.length && !reviews.length && !monitors.length) return memory;
     const items = [...memory.items];

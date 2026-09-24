@@ -539,7 +539,7 @@ function riskyAssumptions(plan: ProductPlan): PortfolioFinding[] {
     }
   }
   for (const item of plan.decisionReevaluation?.cases ?? []) {
-    if (item.verdict !== "review") continue;
+    if (item.verdict !== "review" && item.verdict !== "reconsider") continue;
     items.push(
       finding("assumption", item.recommendation, `${item.warning} ${item.assumption}`, [plan.title], [item.assumption], item.evidence.evidence, items.length + 1),
     );

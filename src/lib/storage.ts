@@ -1,5 +1,6 @@
+import { structureEntry } from "./ledger";
 import { emptyMemory, mergeMemory } from "./memory";
-import type { ProductMemory, ProductPlan } from "./types";
+import type { LedgerEntry, ProductMemory, ProductPlan } from "./types";
 
 const KEY = "pm:latest";
 const MEMORY_KEY = "pm:memory";
@@ -41,7 +42,7 @@ export function loadMemoryLocal(): ProductMemory {
   try {
     const parsed = JSON.parse(raw) as ProductMemory;
     return parsed?.items
-      ? { ...emptyMemory(), ...parsed, products: parsed.products ?? (parsed.product ? [parsed.product] : []), ledger: parsed.ledger ?? [], nextDecisionNumber: parsed.nextDecisionNumber ?? 1 }
+      ? { ...emptyMemory(), ...parsed, products: parsed.products ?? (parsed.product ? [parsed.product] : []), ledger: (parsed.ledger ?? []).map((item) => structureEntry(item as LedgerEntry)), nextDecisionNumber: parsed.nextDecisionNumber ?? 1 }
       : emptyMemory();
   } catch {
     return emptyMemory();

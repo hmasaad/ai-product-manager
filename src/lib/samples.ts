@@ -171,6 +171,211 @@ Date:
 2026-03-12
 `;
 
+export const LEDGER_OBJECT_BRIEF = `{
+  "decisionId": "DEC-142",
+  "question": "Should report generation require an internet connection?",
+  "decision": "Online generation",
+  "date": "2026-09-23",
+  "assumptions": [
+    {
+      "id": "A-01",
+      "statement": "Users usually have connectivity",
+      "confidence": 0.72
+    }
+  ],
+  "evidence": [
+    {
+      "type": "analytics",
+      "metric": "offline_usage",
+      "value": 8
+    }
+  ],
+  "constraints": [
+    "Limited local storage",
+    "Reports can be large"
+  ],
+  "reviewTriggers": [
+    "offline_usage > 25%",
+    "support_requests_offline > 20"
+  ],
+  "status": "active"
+}
+`;
+
+export const FACTS_LAYERS_BRIEF = `Observation:
+8% of report requests currently happen offline.
+
+Assumption:
+Offline reporting is not a significant user need.
+
+Decision:
+Do not implement offline report generation.
+
+Confidence:
+Medium.
+`;
+
+export const FACTS_REEVAL_BRIEF = `${FACTS_LAYERS_BRIEF}
+6 months later:
+Offline usage increased 38%.
+`;
+
+export const COLLAPSED_CLAIM_BRIEF = `Assumption:
+Users don't need offline reports.
+`;
+
+export const TRIGGERS_BRIEF = `Observation:
+8% of report requests currently happen offline.
+
+Assumption:
+Offline reporting is not a significant user need.
+
+Decision:
+Do not implement offline report generation.
+
+Confidence:
+Medium.
+
+Metric trigger
+offline_usage > 25%
+
+Feedback trigger
+offline-related complaints > 20/month
+
+Business trigger
+New customer segment requires offline operation
+
+Technical trigger
+New sync infrastructure becomes available
+
+Time trigger
+Review decision after 90 days
+
+Dependency trigger
+Underlying API architecture changed
+`;
+
+export const TRIGGERS_METRIC_BRIEF = `${TRIGGERS_BRIEF}
+Offline usage increased 38%.
+`;
+
+export const TRIGGERS_TIME_BRIEF = `${TRIGGERS_BRIEF}
+6 months later.
+`;
+
+export const PIPELINE_BRIEF = `Decision #142
+
+Question:
+Should report generation require an internet connection?
+
+Observation:
+8% of report requests currently happen offline.
+
+Assumption:
+Offline usage is low.
+
+Original:
+8%
+
+Current:
+31%
+
+Change:
++23 percentage points
+
+Affected assumption:
+A-01
+
+Impact:
+High
+
+Re-evaluation:
+Required
+
+Decision:
+Do not implement offline report generation.
+
+Metric trigger
+offline_usage > 25%
+`;
+
+export const HUMAN_OWNER_BRIEF = `Decision #142
+
+Question:
+Should report generation require an internet connection?
+
+Original Decision:
+Online report generation
+
+Decision:
+Online report generation
+
+Assumption:
+Connectivity is usually present
+
+Changed Assumption:
+Connectivity is usually present
+
+Trigger:
+Offline usage increased to 31%
+
+Offline usage increased to 31%.
+
+Impact:
+High
+
+Proposed Action:
+Reconsider offline support
+
+Confidence:
+0.86
+
+Metric trigger
+offline_usage > 25%
+`;
+
+export const STATES_BRIEF = `${HUMAN_OWNER_BRIEF}
+
+Decision states
+ACTIVE
+TRIGGERED
+UNDER_REVIEW
+VALIDATED
+DECISION_CHANGED
+DECISION_RETAINED
+
+DEC-142
+ACTIVE
+  ↓
+TRIGGERED
+  ↓
+UNDER_REVIEW
+  ↓
+DECISION_CHANGED
+  ↓
+DEC-207
+
+Successor:
+DEC-207
+`;
+
+export const VERSION_BRIEF = `DEC-142 v1
+Decision:
+Online reports
+
+Reason:
+Low offline usage
+
+DEC-142 v2
+Decision:
+Support queued offline generation
+
+Reason:
+Offline usage increased
+New synchronization infrastructure
+Customer feedback
+`;
+
 export const OFFLINE_STALE_EXISTING = `Inspectors now have continuous LTE on every assigned route.
 The assumption that field work happens without cell signal for a full shift no longer holds.
 `;

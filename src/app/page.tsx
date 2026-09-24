@@ -21,6 +21,13 @@ import {
   REPORT_SIGNAL_BRIEF,
   REPORT_SIGNAL_EXISTING,
   OFFLINE_REPORTS_BRIEF,
+  LEDGER_OBJECT_BRIEF,
+  FACTS_LAYERS_BRIEF,
+  TRIGGERS_BRIEF,
+  PIPELINE_BRIEF,
+  HUMAN_OWNER_BRIEF,
+  STATES_BRIEF,
+  VERSION_BRIEF,
   OFFLINE_REEVAL_BRIEF,
   STRATEGY_BET_BRIEF,
   ROADMAP_BRIEF,
@@ -303,6 +310,83 @@ export default function HomePage() {
               }}
             >
               Offline reports
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(LEDGER_OBJECT_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Structured ledger
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(FACTS_LAYERS_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Facts and assumptions
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(TRIGGERS_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Re-eval triggers
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(PIPELINE_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Re-eval pipeline
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(HUMAN_OWNER_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Human owns the decision
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(STATES_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Decision states
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-rule bg-white px-3 py-1.5 text-sm text-ink-soft hover:bg-paper-2"
+              onClick={() => {
+                setBrief(VERSION_BRIEF);
+                setExisting("");
+                setConstraints("");
+              }}
+            >
+              Decision versions
             </button>
             <button
               type="button"

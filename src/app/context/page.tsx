@@ -151,9 +151,18 @@ export default function ContextPage() {
             <ol className="mt-4 space-y-3">
               {(memory?.ledger ?? []).map((item) => (
                 <li key={item.id} className="rounded-2xl border border-rule bg-white/70 px-4 py-3 text-sm leading-6">
-                  <p className="font-serif text-xl text-navy">Decision #{item.number}</p>
+                  <p className="font-serif text-xl text-navy">{item.decisionId || `DEC-${item.number}`} v{item.version ?? 1}</p>
+                  <p className="mt-1 text-ink-soft">Decision #{item.number} · {item.state || item.lifecycle || item.status}</p>
                   <p className="mt-1">{item.question}</p>
-                  <p className="mt-2 text-ink-soft">{item.decision || "Open."}</p>
+                  {(item.observations ?? []).slice(0, 1).map((line) => (
+                    <p key={line.id} className="mt-2">Observation: {line.statement || line.text}</p>
+                  ))}
+                  {(item.assumptions ?? []).slice(0, 1).map((line) => (
+                    <p key={line.id} className="mt-1">Assumption: {line.statement || line.text}</p>
+                  ))}
+                  <p className="mt-2 text-ink-soft">Decision: {item.decision || "Open."}</p>
+                  <p className="mt-1 text-ink-soft">Confidence: {item.decisionConfidence || "Unlabeled"}</p>
+                  {item.reason ? <p className="mt-1">{item.reason}</p> : null}
                   <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft">
                     {item.owner || "Unassigned"} · {item.date || "Unrecorded"}
                   </p>

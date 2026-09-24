@@ -109,12 +109,12 @@ export const PIPELINE: { id: StepId; label: string; detail: string }[] = [
   {
     id: "ledger",
     label: "Decision Ledger",
-    detail: "Numbered records of significant decisions, so later questions have an answer.",
+    detail: "Observations, assumptions, and decisions stay on separate layers. Versions keep the full decision history.",
   },
   {
     id: "reevaluate",
     label: "Decision Re-evaluation",
-    detail: "New evidence is checked against old assumptions. A changed assumption can reopen a decision.",
+    detail: "A fired trigger writes a proposal card and moves the decision through states. A change writes a new version. The old version stays.",
   },
   {
     id: "graph",
